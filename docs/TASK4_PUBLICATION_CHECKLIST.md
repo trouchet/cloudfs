@@ -7,7 +7,8 @@
 - [x] Repositório **público** no GitHub: `trouchet/cloudfs`
 - [x] Licença open-source: MIT (verificar se LICENSE file existe)
 - [x] Build baseado no `extension-template`: ✅ (`extension_config.cmake` existe)
-- [x] Código commitado e limpo (commit: `dc364b16ed35f89f2526e839afa517b906466ef9`)
+- [x] Código commitado e limpo (commit:
+  `dc364b16ed35f89f2526e839afa517b906466ef9`)
 
 ### Arquivos Criados ✅
 
@@ -16,7 +17,7 @@
   - Repositório: `trouchet/cloudfs`
   - Maintainer: `trouchet`
 
----
+______________________________________________________________________
 
 ## Próximos Passos
 
@@ -34,6 +35,7 @@ ls -lh build/release/extension/cloudfs/cloudfs.duckdb_extension
 ```
 
 **Testar carregamento:**
+
 ```sql
 LOAD 'build/release/extension/cloudfs/cloudfs.duckdb_extension';
 SELECT cloudfs_version();
@@ -74,9 +76,11 @@ EOF
 
 ### 3. Setup GitHub Actions CI ⏳
 
-O repositório precisa ter CI rodando com o template do DuckDB. Verificar se `.github/workflows/` existe.
+O repositório precisa ter CI rodando com o template do DuckDB. Verificar se
+`.github/workflows/` existe.
 
 Se não existir, criar workflow baseado no extension-template:
+
 - https://github.com/duckdb/extension-template/tree/main/.github/workflows
 
 ### 4. Commitar description.yml ⏳
@@ -98,6 +102,7 @@ git push origin main
 ### 5. Fork e PR no Community Extensions ⏳
 
 #### a) Fork do repositório
+
 ```bash
 # No GitHub web UI
 https://github.com/duckdb/community-extensions
@@ -105,6 +110,7 @@ https://github.com/duckdb/community-extensions
 ```
 
 #### b) Clone e criar branch
+
 ```bash
 git clone https://github.com/trouchet/community-extensions
 cd community-extensions
@@ -112,12 +118,14 @@ git checkout -b add-cloudfs-extension
 ```
 
 #### c) Criar arquivo no local correto
+
 ```bash
 mkdir -p extensions/cloudfs
 cp ~/github/cloudfs/description.yml extensions/cloudfs/description.yml
 ```
 
 #### d) Commit e push
+
 ```bash
 git add extensions/cloudfs/description.yml
 git commit -m "Add cloudfs extension
@@ -138,6 +146,7 @@ git push origin add-cloudfs-extension
 ```
 
 #### e) Abrir PR
+
 ```
 Repositório: https://github.com/duckdb/community-extensions
 Base: main
@@ -173,6 +182,7 @@ License: MIT
 ### 7. Após Merge 🎉
 
 Usuários poderão instalar com:
+
 ```sql
 INSTALL cloudfs FROM community;
 LOAD cloudfs;
@@ -180,9 +190,10 @@ SELECT * FROM ls('spfs://empresa.sharepoint.com/sites/X/Docs/');
 ```
 
 Documentação estará em:
+
 - https://duckdb.org/community_extensions/extensions/cloudfs
 
----
+______________________________________________________________________
 
 ## Manutenção Futura
 
@@ -201,10 +212,11 @@ repo:
 ### Responder Issues
 
 Usuários reportarão issues em:
+
 - https://github.com/trouchet/cloudfs/issues
 - https://github.com/duckdb/community-extensions/issues (mencionando @cloudfs)
 
----
+______________________________________________________________________
 
 ## Suporte
 
@@ -213,22 +225,22 @@ Usuários reportarão issues em:
 - **Community Extensions Docs**: https://duckdb.org/community_extensions/
 - **Extension Template**: https://github.com/duckdb/extension-template
 
----
+______________________________________________________________________
 
 ## Checklist Final
 
-| Etapa | Status | Ação |
-|-------|--------|------|
-| Código limpo | ✅ | Commit dc364b1 |
-| Repositório público | ✅ | github.com/trouchet/cloudfs |
-| description.yml | ✅ | Criado na raiz |
-| LICENSE | ⏳ | Verificar se existe |
-| Build local | ⏳ | Testar `make release` |
-| CI/Actions | ⏳ | Verificar workflows |
-| Commitar description.yml | ⏳ | `git commit && push` |
-| Fork community-extensions | ⏳ | No GitHub |
-| Criar PR | ⏳ | extensions/cloudfs/description.yml |
-| Aguardar review | ⏳ | ~2-7 dias |
-| Build CI passa | ⏳ | ~20 min após PR |
-| Merge | ⏳ | Maintainers aprovam |
-| Publicado | 🎉 | `INSTALL cloudfs FROM community` |
+| Etapa                     | Status | Ação                               |
+| ------------------------- | ------ | ---------------------------------- |
+| Código limpo              | ✅     | Commit dc364b1                     |
+| Repositório público       | ✅     | github.com/trouchet/cloudfs        |
+| description.yml           | ✅     | Criado na raiz                     |
+| LICENSE                   | ⏳     | Verificar se existe                |
+| Build local               | ⏳     | Testar `make release`              |
+| CI/Actions                | ⏳     | Verificar workflows                |
+| Commitar description.yml  | ⏳     | `git commit && push`               |
+| Fork community-extensions | ⏳     | No GitHub                          |
+| Criar PR                  | ⏳     | extensions/cloudfs/description.yml |
+| Aguardar review           | ⏳     | ~2-7 dias                          |
+| Build CI passa            | ⏳     | ~20 min após PR                    |
+| Merge                     | ⏳     | Maintainers aprovam                |
+| Publicado                 | 🎉     | `INSTALL cloudfs FROM community`   |

@@ -27,88 +27,79 @@ namespace duckdb {
 //   - Shortcut files are transparently followed.
 // ─────────────────────────────────────────────────────────────────────────────
 class GDriveBackend : public ICloudBackend {
-public:
-    explicit GDriveBackend(CloudHttpClient &http) : http_(http) {}
+  public:
+    explicit GDriveBackend(CloudHttpClient& http) : http_(http) {}
 
     std::string Scheme() const override { return "gdfs"; }
-    std::string Name()   const override { return "Google Drive"; }
+    std::string Name() const override { return "Google Drive"; }
 
     ProviderCapabilities Capabilities() const override {
-        return {
-            .supports_range_reads       = true,   // via Range header on alt=media
-            .supports_resumable_uploads = true,   // resumable upload protocol
-            .supports_server_side_copy  = true,   // files.copy API
-            .supports_recursive_list    = false,
-            .needs_total_size_upfront   = false,
-            .upload_chunk_alignment     = 256 * 1024,   // 256 KiB (Google requirement)
-            .min_upload_chunk           = 256 * 1024,
-            .max_upload_chunk           = 256 * 1024 * 1024
-        };
+        return {.supports_range_reads = true,       // via Range header on alt=media
+                .supports_resumable_uploads = true, // resumable upload protocol
+                .supports_server_side_copy = true,  // files.copy API
+                .supports_recursive_list = false,
+                .needs_total_size_upfront = false,
+                .upload_chunk_alignment = 256 * 1024, // 256 KiB (Google requirement)
+                .min_upload_chunk = 256 * 1024,
+                .max_upload_chunk = 256 * 1024 * 1024};
     }
 
-    bool ParseUrl(const std::string &url,
-                  std::string &out_root, std::string &out_path,
-                  std::string &err) const override;
+    bool ParseUrl(const std::string& url, std::string& out_root, std::string& out_path,
+                  std::string& err) const override;
 
-    bool ResolveRoot(const std::string &root, const std::string &token,
-                     std::string &out_id, std::string &err) override;
+    bool ResolveRoot(const std::string& root, const std::string& token, std::string& out_id,
+                     std::string& err) override;
 
-    bool Stat(const std::string &root, const std::string &path,
-              const std::string &token, CloudItem &out, std::string &err) override;
+    bool Stat(const std::string& root, const std::string& path, const std::string& token,
+              CloudItem& out, std::string& err) override;
 
-    int64_t ReadRange(const CloudItem &item, const std::string &root,
-                      const std::string &token,
-                      int64_t off, int64_t len, char *buf, std::string &err) override;
+    int64_t ReadRange(const CloudItem& item, const std::string& root, const std::string& token,
+                      int64_t off, int64_t len, char* buf, std::string& err) override;
 
     // GDrive does not issue pre-authenticated URLs (RefreshDownloadUrl returns false).
     // All reads go through the authenticated alt=media endpoint.
-    bool RefreshDownloadUrl(const CloudItem &, const std::string &,
-                             const std::string &, std::string &,
-                             std::string &err) override {
+    bool RefreshDownloadUrl(const CloudItem&, const std::string&, const std::string&, std::string&,
+                            std::string& err) override {
         err = "Google Drive: pre-authenticated URLs not supported; use ReadRange()";
         return false;
     }
 
-    bool ListFolder(const std::string &root, const std::string &folder_id,
-                    const std::string &token,
-                    const std::function<void(const CloudItem &)> &cb,
-                    std::string &cursor, std::string &err) override;
+    bool ListFolder(const std::string& root, const std::string& folder_id, const std::string& token,
+                    const std::function<void(const CloudItem&)>& cb, std::string& cursor,
+                    std::string& err) override;
 
-    bool CreateUploadSession(const std::string &root, const std::string &parent_id,
-                              const std::string &name, int64_t total_size,
-                              const std::string &token,
-                              CloudUploadSession &out, std::string &err) override;
+    bool CreateUploadSession(const std::string& root, const std::string& parent_id,
+                             const std::string& name, int64_t total_size, const std::string& token,
+                             CloudUploadSession& out, std::string& err) override;
 
-    bool UploadChunk(const CloudUploadSession &s, const char *data,
-                     int64_t off, int64_t size, bool last,
-                     const std::string &token, std::string &err) override;
+    bool UploadChunk(const CloudUploadSession& s, const char* data, int64_t off, int64_t size,
+                     bool last, const std::string& token, std::string& err) override;
 
-    bool DeleteItem(const std::string &root, const std::string &id,
-                    const std::string &token, std::string &err) override;
+    bool DeleteItem(const std::string& root, const std::string& id, const std::string& token,
+                    std::string& err) override;
 
-    bool CreateFolder(const std::string &root, const std::string &parent_id,
-                      const std::string &name, const std::string &token,
-                      CloudItem &out, std::string &err) override;
+    bool CreateFolder(const std::string& root, const std::string& parent_id,
+                      const std::string& name, const std::string& token, CloudItem& out,
+                      std::string& err) override;
 
-    bool CopyItem(const std::string &root, const std::string &src_id,
-                  const std::string &dst_parent_id, const std::string &dst_name,
-                  const std::string &token, std::string &err) override;
+    bool CopyItem(const std::string& root, const std::string& src_id,
+                  const std::string& dst_parent_id, const std::string& dst_name,
+                  const std::string& token, std::string& err) override;
 
-private:
+  private:
     // Path resolution: Google Drive has no native path API.
     // We walk the tree: root → child named X → child named Y → …
-    bool ResolvePathWalk(const std::string &start_folder_id,
-                          const std::vector<std::string> &segments,
-                          const std::string &token,
-                          CloudItem &out, std::string &err);
+    bool ResolvePathWalk(const std::string& start_folder_id,
+                         const std::vector<std::string>& segments, const std::string& token,
+                         CloudItem& out, std::string& err);
 
     // Build download URL for a given file ID
-    std::string DownloadUrl(const std::string &file_id) const {
-        return "https://www.googleapis.com/drive/v3/files/" +
-               file_id + "?alt=media&supportsAllDrives=true";
+    std::string DownloadUrl(const std::string& file_id) const {
+        return "https://www.googleapis.com/drive/v3/files/" + file_id +
+               "?alt=media&supportsAllDrives=true";
     }
 
-    CloudHttpClient &http_;
+    CloudHttpClient& http_;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,24 +107,20 @@ private:
 // OAuth2 PKCE flow for Google Drive (user-facing interactive auth).
 // ─────────────────────────────────────────────────────────────────────────────
 class GDriveOAuthProvider : public OAuth2AuthBase {
-public:
+  public:
     GDriveOAuthProvider(std::string client_id, std::string client_secret)
-        : OAuth2AuthBase("gdrive"),
-          client_id_(std::move(client_id)),
+        : OAuth2AuthBase("gdrive"), client_id_(std::move(client_id)),
           client_secret_(std::move(client_secret)) {}
 
-protected:
-    bool AcquireToken(std::string &err) override; // Device Code Flow (Google)
-    bool RefreshToken(std::string &err) override;
+  protected:
+    bool AcquireToken(std::string& err) override; // Device Code Flow (Google)
+    bool RefreshToken(std::string& err) override;
 
-private:
+  private:
     std::string client_id_, client_secret_;
-    static constexpr const char *kScope =
-        "https://www.googleapis.com/auth/drive";
-    static constexpr const char *kTokenUrl =
-        "https://oauth2.googleapis.com/token";
-    static constexpr const char *kDeviceUrl =
-        "https://oauth2.googleapis.com/device/code";
+    static constexpr const char* kScope = "https://www.googleapis.com/auth/drive";
+    static constexpr const char* kTokenUrl = "https://oauth2.googleapis.com/token";
+    static constexpr const char* kDeviceUrl = "https://oauth2.googleapis.com/device/code";
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,15 +129,15 @@ private:
 // Best for server-side pipelines and CI/CD.
 // ─────────────────────────────────────────────────────────────────────────────
 class GDriveServiceAccountAuth : public ICloudAuthProvider {
-public:
+  public:
     // key_json: contents of the service account JSON key file
     explicit GDriveServiceAccountAuth(std::string key_json);
 
-    bool GetAccessToken(std::string &out, std::string &err) override;
+    bool GetAccessToken(std::string& out, std::string& err) override;
     std::string ProviderName() const override { return "gdrive-sa"; }
 
-private:
-    bool RefreshServiceAccountToken(std::string &err);
+  private:
+    bool RefreshServiceAccountToken(std::string& err);
     std::string SignJWT() const;
 
     std::string project_id_, client_email_, private_key_id_, private_key_;

@@ -49,7 +49,7 @@ echo "✓ All build dependencies installed"
 echo ""
 
 # Check project structure
-cd /home/pingu/github/cloudfs
+cd /home/pingu/github/cloudfs || exit 1
 
 echo "Checking project structure..."
 if [ ! -f CMakeLists.txt ]; then

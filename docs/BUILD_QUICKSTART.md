@@ -2,10 +2,10 @@
 
 ## ⚠️ Problema Identificado
 
-O binário `cloudfs.duckdb_extension` foi compilado para DuckDB v0.0.1, mas você tem v1.4.0 instalado.
-**Solução**: Recompilar a extensão.
+O binário `cloudfs.duckdb_extension` foi compilado para DuckDB v0.0.1, mas você
+tem v1.4.0 instalado. **Solução**: Recompilar a extensão.
 
----
+______________________________________________________________________
 
 ## 📦 Passo 1: Instalar Dependências
 
@@ -15,9 +15,10 @@ sudo apt-get install -y build-essential cmake ninja-build \
      libssl-dev libcurl4-openssl-dev libssh2-1-dev
 ```
 
-**Nota**: Se o sudo estiver desabilitado no Windows, vá em **Settings → Developer Settings** para habilitá-lo.
+**Nota**: Se o sudo estiver desabilitado no Windows, vá em **Settings →
+Developer Settings** para habilitá-lo.
 
----
+______________________________________________________________________
 
 ## 🔨 Passo 2: Verificar Dependências (Opcional)
 
@@ -28,7 +29,7 @@ chmod +x check_deps.sh
 
 Se tudo estiver OK, prossiga para o Passo 3.
 
----
+______________________________________________________________________
 
 ## 🏗️ Passo 3: Compilar
 
@@ -40,6 +41,7 @@ chmod +x build_and_test.sh
 ```
 
 Este script:
+
 - ✅ Compila a extensão
 - ✅ Testa todas as table functions (ls, stat, du)
 - ✅ Verifica leitura de arquivos via vfs://
@@ -62,7 +64,7 @@ cp cloudfs.duckdb_extension ../
 cd ..
 ```
 
----
+______________________________________________________________________
 
 ## ✅ Passo 4: Teste Rápido
 
@@ -99,13 +101,14 @@ pkill cloudfs-agent
 rm -rf /tmp/test_cloudfs
 ```
 
----
+______________________________________________________________________
 
 ## 🎯 Resultado Esperado
 
 Se a Task 1 foi corrigida com sucesso, você verá:
 
 ### ls() - Lista de arquivos
+
 ```
 ┌─────────────┬──────┬─────────────┬──────┬───────────────┐
 │     url     │ name │    type     │ size │  size_pretty  │
@@ -115,6 +118,7 @@ Se a Task 1 foi corrigida com sucesso, você verá:
 ```
 
 ### stat() - Metadata
+
 ```
 ┌────────────┬──────┬──────┬─────────────┐
 │    name    │ size │ type │   modified  │
@@ -124,6 +128,7 @@ Se a Task 1 foi corrigida com sucesso, você verá:
 ```
 
 ### du() - Uso de disco
+
 ```
 ┌─────────────────────────┬────────────┬─────────────┐
 │       directory         │ file_count │ size_pretty │
@@ -132,35 +137,40 @@ Se a Task 1 foi corrigida com sucesso, você verá:
 └─────────────────────────┴────────────┴─────────────┘
 ```
 
----
+______________________________________________________________________
 
 ## 🐛 Troubleshooting
 
 ### Erro: "Could NOT find OpenSSL"
+
 ```bash
 sudo apt-get install -y libssl-dev libcurl4-openssl-dev libssh2-1-dev
 ```
 
 ### Erro: "cmake: command not found"
+
 ```bash
 sudo apt-get install -y cmake ninja-build
 ```
 
 ### Erro: "The file was built for DuckDB version 'v0.0.1'"
+
 - Você está usando o binário antigo
 - Solução: Recompile seguindo o Passo 3
 
 ### Erro: "Secret provider 'token' not found for type 'vfs'"
+
 - A extensão não carregou corretamente
 - Verifique se o caminho está correto: `LOAD './cloudfs.duckdb_extension';`
 - Certifique-se de que recompilou após as correções
 
 ### Erro: "Table Function with name ls does not exist"
+
 - As table functions não foram registradas
 - Isso significa que o binário é antigo OU as correções não foram compiladas
 - Recompile e teste novamente
 
----
+______________________________________________________________________
 
 ## 📋 Checklist
 
@@ -168,16 +178,18 @@ Antes de reportar problemas:
 
 - [ ] Instalei todas as dependências (libssl-dev, libcurl4, libssh2)
 - [ ] Recompilei a extensão APÓS as correções (timestamp do binário > 08:22)
-- [ ] Verifiquei que `cloudfs-agent` está rodando (`ps aux | grep cloudfs-agent`)
+- [ ] Verifiquei que `cloudfs-agent` está rodando
+  (`ps aux | grep cloudfs-agent`)
 - [ ] Usei o token correto no secret
 - [ ] O arquivo `cloudfs.duckdb_extension` está no diretório atual
 
----
+______________________________________________________________________
 
 ## ✨ Status das Correções
 
-**Data**: 2026-06-03 08:22  
+**Data**: 2026-06-03 08:22\
 **Arquivos corrigidos**:
+
 - `src/include/core/cloud_table_functions.hpp` ✅
 - `src/core/cloud_table_functions.cpp` ✅
 

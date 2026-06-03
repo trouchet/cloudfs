@@ -3,26 +3,33 @@
 ## 📦 Arquivos Criados
 
 ### Configuração de Commitlint
+
 - **`.commitlintrc.json`** - Configuração JSON (alternativa simples)
-- **`commitlint.config.js`** - Configuração JavaScript (mais flexível, com comentários)
+- **`commitlint.config.js`** - Configuração JavaScript (mais flexível, com
+  comentários)
 - **`package.json`** - Dependências Node.js e scripts npm
 
 ### Configuração de Pre-commit
+
 - **`.pre-commit-config.yaml`** - Configuração dos hooks de pre-commit
 - **`.clang-format`** - Estilo de código C++ (baseado em LLVM)
 - **`.editorconfig`** - Configuração universal de editores
-- **`.secrets.baseline`** - Será criado no setup (baseline para detecção de secrets)
+- **`.secrets.baseline`** - Será criado no setup (baseline para detecção de
+  secrets)
 
 ### Scripts de Automação
-- **`setup_dev_tools.sh`** - Instalação completa de ferramentas de desenvolvimento
+
+- **`setup_dev_tools.sh`** - Instalação completa de ferramentas de
+  desenvolvimento
 - **`validate_dev_setup.sh`** - Validação do ambiente de desenvolvimento
 - **`Makefile`** - Comandos make para tarefas comuns
 
 ### Documentação
+
 - **`DEVELOPMENT.md`** - Guia completo de desenvolvimento
 - **`.gitignore`** - Atualizado com padrões de Node.js e Python
 
----
+______________________________________________________________________
 
 ## 🚀 Quick Start
 
@@ -35,6 +42,7 @@ chmod +x setup_dev_tools.sh
 ```
 
 **OU** usando Make:
+
 ```bash
 make dev-setup
 ```
@@ -48,6 +56,7 @@ chmod +x validate_dev_setup.sh
 ```
 
 **OU**:
+
 ```bash
 make validate
 ```
@@ -66,21 +75,21 @@ git add .
 git commit -m "feat(core): add new filesystem feature"
 ```
 
----
+______________________________________________________________________
 
 ## 🎯 Ferramentas Instaladas
 
-| Ferramenta | Propósito | Comando |
-|------------|-----------|---------|
-| **pre-commit** | Framework de Git hooks | `pre-commit run --all-files` |
-| **commitlint** | Validação de mensagens de commit | `npx commitlint` |
-| **clang-format** | Formatação de código C++ | `clang-format -i file.cpp` |
-| **shellcheck** | Linting de shell scripts | `shellcheck script.sh` |
-| **cmake-format** | Formatação de CMake | `cmake-format -i CMakeLists.txt` |
-| **detect-secrets** | Detecção de secrets no código | `detect-secrets scan` |
-| **mdformat** | Formatação de Markdown | `mdformat file.md` |
+| Ferramenta         | Propósito                        | Comando                          |
+| ------------------ | -------------------------------- | -------------------------------- |
+| **pre-commit**     | Framework de Git hooks           | `pre-commit run --all-files`     |
+| **commitlint**     | Validação de mensagens de commit | `npx commitlint`                 |
+| **clang-format**   | Formatação de código C++         | `clang-format -i file.cpp`       |
+| **shellcheck**     | Linting de shell scripts         | `shellcheck script.sh`           |
+| **cmake-format**   | Formatação de CMake              | `cmake-format -i CMakeLists.txt` |
+| **detect-secrets** | Detecção de secrets no código    | `detect-secrets scan`            |
+| **mdformat**       | Formatação de Markdown           | `mdformat file.md`               |
 
----
+______________________________________________________________________
 
 ## 📝 Formato de Commit
 
@@ -110,11 +119,14 @@ git commit -m "feat(core): add new filesystem feature"
 
 ### Escopos Válidos
 
-`core`, `table-functions`, `auth`, `cache`, `http`, `providers`, `onedrive`, `sharepoint`, `gdrive`, `dropbox`, `sftp`, `vfs`, `agent`, `extension`, `build`, `deps`, `docs`, `tests`, `scripts`
+`core`, `table-functions`, `auth`, `cache`, `http`, `providers`, `onedrive`,
+`sharepoint`, `gdrive`, `dropbox`, `sftp`, `vfs`, `agent`, `extension`, `build`,
+`deps`, `docs`, `tests`, `scripts`
 
 ### Exemplos
 
 ✅ **Válidos**:
+
 ```bash
 git commit -m "fix(table-functions): handle null CloudFileSystem pointer"
 git commit -m "feat(onedrive): add delta sync support"
@@ -123,6 +135,7 @@ git commit -m "chore(deps): update DuckDB to v1.4.0"
 ```
 
 ❌ **Inválidos**:
+
 ```bash
 git commit -m "Fixed bug"                    # Sem tipo/escopo
 git commit -m "FEAT: new feature"            # Tipo em maiúscula
@@ -130,30 +143,34 @@ git commit -m "feat(Core): add feature"      # Escopo em maiúscula
 git commit -m "feat(core): Add feature."     # Subject começa com maiúscula e tem ponto
 ```
 
----
+______________________________________________________________________
 
 ## 🪝 Hooks Configurados
 
 ### Pre-commit (antes de commitar)
 
 1. **Verificação de arquivos**
+
    - Tamanho máximo (1MB)
    - Newline no final
    - Trailing whitespace
    - Conflitos de merge
 
-2. **Formatação de código**
+1. **Formatação de código**
+
    - C++ (clang-format)
    - CMake (cmake-format)
    - Shell (shellcheck)
    - Markdown (mdformat)
    - Go (gofmt, govet)
 
-3. **Segurança**
+1. **Segurança**
+
    - Detecção de secrets
    - Verificação de sintaxe JSON/YAML
 
-4. **Prevenção**
+1. **Prevenção**
+
    - Não permite commit direto em main/master
    - Verifica conflitos de case-insensitive filesystems
 
@@ -164,7 +181,7 @@ git commit -m "feat(core): Add feature."     # Subject começa com maiúscula e 
 - Valida comprimento (max 100 caracteres no subject)
 - Verifica que subject não termina com ponto
 
----
+______________________________________________________________________
 
 ## 🔧 Comandos Make Úteis
 
@@ -181,7 +198,7 @@ make clean             # Limpar build artifacts
 make commit-lint       # Validar último commit
 ```
 
----
+______________________________________________________________________
 
 ## 🎨 Estilo de Código C++
 
@@ -207,20 +224,20 @@ make format
 make check-format
 ```
 
----
+______________________________________________________________________
 
 ## 🔍 Validações Automáticas
 
 ### Ao fazer `git commit`:
 
 1. ✅ Código C++ formatado corretamente
-2. ✅ Shell scripts sem erros (shellcheck)
-3. ✅ CMake formatado
-4. ✅ Markdown formatado
-5. ✅ Nenhum secret commitado
-6. ✅ Arquivos terminam com newline
-7. ✅ Sem trailing whitespace
-8. ✅ Mensagem de commit no formato correto
+1. ✅ Shell scripts sem erros (shellcheck)
+1. ✅ CMake formatado
+1. ✅ Markdown formatado
+1. ✅ Nenhum secret commitado
+1. ✅ Arquivos terminam com newline
+1. ✅ Sem trailing whitespace
+1. ✅ Mensagem de commit no formato correto
 
 ### Bypass (use com cuidado!)
 
@@ -232,13 +249,14 @@ git commit --no-verify -m "wip: work in progress"
 SKIP=clang-format git commit -m "fix: emergency hotfix"
 ```
 
----
+______________________________________________________________________
 
 ## 🐛 Troubleshooting
 
 ### Problema: "commitlint not found"
 
 **Solução**:
+
 ```bash
 npm install
 npx commitlint --version
@@ -247,6 +265,7 @@ npx commitlint --version
 ### Problema: "clang-format not found"
 
 **Solução**:
+
 ```bash
 # Linux/WSL
 sudo apt-get install clang-format
@@ -258,6 +277,7 @@ brew install clang-format
 ### Problema: "pre-commit hook failed"
 
 **Solução**:
+
 ```bash
 # Ver o que falhou
 pre-commit run --all-files --verbose
@@ -273,6 +293,7 @@ git commit -m "fix(core): your message"
 ### Problema: "Secret detected"
 
 **Solução**:
+
 ```bash
 # Se for falso positivo, atualizar baseline
 detect-secrets scan > .secrets.baseline
@@ -281,7 +302,7 @@ detect-secrets scan > .secrets.baseline
 # pragma: allowlist secret
 ```
 
----
+______________________________________________________________________
 
 ## 📚 Documentação Adicional
 
@@ -289,7 +310,7 @@ detect-secrets scan > .secrets.baseline
 - **[COMMIT_PLAN.md](COMMIT_PLAN.md)** - Estratégia de commits
 - **[BUILD_QUICKSTART.md](BUILD_QUICKSTART.md)** - Guia de build
 
----
+______________________________________________________________________
 
 ## ✅ Checklist de Verificação
 
@@ -303,7 +324,7 @@ Antes de fazer PR:
 - [ ] Sem secrets commitados
 - [ ] Documentação atualizada (se necessário)
 
----
+______________________________________________________________________
 
 ## 🎓 Recursos Externos
 
@@ -313,35 +334,40 @@ Antes de fazer PR:
 - [clang-format Options](https://clang.llvm.org/docs/ClangFormatStyleOptions.html)
 - [Semantic Versioning](https://semver.org/)
 
----
+______________________________________________________________________
 
 ## 🚀 Próximos Passos
 
 1. **Rodar setup**:
+
    ```bash
    make dev-setup
    ```
 
-2. **Validar**:
+1. **Validar**:
+
    ```bash
    make validate
    ```
 
-3. **Fazer primeiro commit seguindo o padrão**:
+1. **Fazer primeiro commit seguindo o padrão**:
+
    ```bash
    git add .
    git commit -m "chore(build): configure commitlint and pre-commit hooks"
    ```
 
-4. **Verificar que funciona**:
+1. **Verificar que funciona**:
+
    ```bash
    # Tentar commit inválido (deve falhar)
    git commit --allow-empty -m "invalid commit"
-   
+
    # Tentar commit válido (deve passar)
    git commit --allow-empty -m "test(build): validate hooks"
    ```
 
----
+______________________________________________________________________
 
-**Configuração completa! Ambiente de desenvolvimento profissional pronto para uso! 🎉**
+**Configuração completa! Ambiente de desenvolvimento profissional pronto para
+uso! 🎉**

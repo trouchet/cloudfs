@@ -1,39 +1,50 @@
 #include "core/cloud_http.hpp"
-#include <curl/curl.h>
-#include <cstring>
-#include <cmath>
-#include <thread>
-#include <chrono>
+
 #include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstring>
 #include <sstream>
+#include <thread>
+
+#include <curl/curl.h>
 
 namespace duckdb {
 
 // ─── Write callbacks ──────────────────────────────────────────────────────────
-size_t CloudHttpClient::WriteCb(char *p, size_t s, size_t n, void *ud) {
-    static_cast<HttpResponse *>(ud)->body.append(p, s * n);
+size_t CloudHttpClient::WriteCb(char* p, size_t s, size_t n, void* ud) {
+    static_cast<HttpResponse*>(ud)->body.append(p, s * n);
     return s * n;
 }
 
-struct BufCtx { char *buf; int64_t cap; int64_t *written; };
-size_t CloudHttpClient::WriteBufCb(char *p, size_t s, size_t n, void *ud) {
-    auto *c = static_cast<BufCtx *>(ud);
+struct BufCtx {
+    char* buf;
+    int64_t cap;
+    int64_t* written;
+};
+size_t CloudHttpClient::WriteBufCb(char* p, size_t s, size_t n, void* ud) {
+    auto* c = static_cast<BufCtx*>(ud);
     int64_t bytes = (int64_t)(s * n);
     int64_t space = c->cap - *c->written;
-    int64_t copy  = std::min(bytes, space);
-    if (copy > 0) { memcpy(c->buf + *c->written, p, copy); *c->written += copy; }
+    int64_t copy = std::min(bytes, space);
+    if (copy > 0) {
+        memcpy(c->buf + *c->written, p, copy);
+        *c->written += copy;
+    }
     return s * n; // always consume; excess is discarded when server ignores Range
 }
 
-size_t CloudHttpClient::HeaderCb(char *p, size_t s, size_t n, void *ud) {
-    auto *r = static_cast<HttpResponse *>(ud);
+size_t CloudHttpClient::HeaderCb(char* p, size_t s, size_t n, void* ud) {
+    auto* r = static_cast<HttpResponse*>(ud);
     std::string h(p, s * n);
     auto colon = h.find(':');
     if (colon != std::string::npos) {
         std::string key = h.substr(0, colon);
         std::string val = h.substr(colon + 1);
-        while (!val.empty() && (val.front() == ' ' || val.front() == '\t')) val.erase(val.begin());
-        while (!val.empty() && (val.back() == '\r' || val.back() == '\n' || val.back() == ' ')) val.pop_back();
+        while (!val.empty() && (val.front() == ' ' || val.front() == '\t'))
+            val.erase(val.begin());
+        while (!val.empty() && (val.back() == '\r' || val.back() == '\n' || val.back() == ' '))
+            val.pop_back();
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         r->headers[key] = val;
     }
@@ -41,111 +52,113 @@ size_t CloudHttpClient::HeaderCb(char *p, size_t s, size_t n, void *ud) {
 }
 
 // ─── CURL setup ───────────────────────────────────────────────────────────────
-CURL *CloudHttpClient::MakeCurl(HttpResponse &resp) {
-    CURL *c = curl_easy_init();
-    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION,  WriteCb);
-    curl_easy_setopt(c, CURLOPT_WRITEDATA,      &resp);
+CURL* CloudHttpClient::MakeCurl(HttpResponse& resp) {
+    CURL* c = curl_easy_init();
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteCb);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &resp);
     curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, HeaderCb);
-    curl_easy_setopt(c, CURLOPT_HEADERDATA,     &resp);
-    curl_easy_setopt(c, CURLOPT_TIMEOUT,        120L);
+    curl_easy_setopt(c, CURLOPT_HEADERDATA, &resp);
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
     curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(c, CURLOPT_MAXREDIRS,      5L);
-    curl_easy_setopt(c, CURLOPT_TCP_KEEPALIVE,  1L);
+    curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
+    curl_easy_setopt(c, CURLOPT_TCP_KEEPALIVE, 1L);
     return c;
 }
 
-static struct curl_slist *BuildHeaders(
-        const std::unordered_map<std::string,std::string> &hdrs) {
-    struct curl_slist *list = nullptr;
-    for (auto &[k, v] : hdrs)
+static struct curl_slist* BuildHeaders(const std::unordered_map<std::string, std::string>& hdrs) {
+    struct curl_slist* list = nullptr;
+    for (auto& [k, v] : hdrs)
         list = curl_slist_append(list, (k + ": " + v).c_str());
     return list;
 }
 
-CloudHttpClient::CloudHttpClient()  { curl_global_init(CURL_GLOBAL_DEFAULT); }
+CloudHttpClient::CloudHttpClient() {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+}
 CloudHttpClient::~CloudHttpClient() {}
 
-bool CloudHttpClient::ShouldRetry(long status, const CloudRetryPolicy &p) {
+bool CloudHttpClient::ShouldRetry(long status, const CloudRetryPolicy& p) {
     return std::find(p.retryable.begin(), p.retryable.end(), (int)status) != p.retryable.end();
 }
 
-void CloudHttpClient::WaitForRetry(int attempt, const CloudRetryPolicy &p) {
+void CloudHttpClient::WaitForRetry(int attempt, const CloudRetryPolicy& p) {
     int ms = (int)(p.initial_wait_ms * std::pow(p.backoff_factor, attempt));
     ms = std::min(ms, p.max_wait_ms);
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
 // ─── Execute ──────────────────────────────────────────────────────────────────
-HttpResponse CloudHttpClient::Execute(const HttpRequest &req, const CloudRetryPolicy &policy) {
+HttpResponse CloudHttpClient::Execute(const HttpRequest& req, const CloudRetryPolicy& policy) {
     for (int attempt = 0; attempt <= policy.max_retries; ++attempt) {
         HttpResponse resp;
-        CURL *c = MakeCurl(resp);
+        CURL* c = MakeCurl(resp);
         curl_easy_setopt(c, CURLOPT_URL, req.url.c_str());
 
         if (req.method == "POST") {
             curl_easy_setopt(c, CURLOPT_POST, 1L);
-            curl_easy_setopt(c, CURLOPT_POSTFIELDS,    req.body.c_str());
+            curl_easy_setopt(c, CURLOPT_POSTFIELDS, req.body.c_str());
             curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, (long)req.body.size());
         } else if (req.method == "PUT") {
             curl_easy_setopt(c, CURLOPT_CUSTOMREQUEST, "PUT");
             if (req.body_data) {
-                curl_easy_setopt(c, CURLOPT_POSTFIELDS,    req.body_data);
+                curl_easy_setopt(c, CURLOPT_POSTFIELDS, req.body_data);
                 curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, (long)req.body_size);
             } else {
-                curl_easy_setopt(c, CURLOPT_POSTFIELDS,    req.body.c_str());
+                curl_easy_setopt(c, CURLOPT_POSTFIELDS, req.body.c_str());
                 curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, (long)req.body.size());
             }
         } else if (req.method == "DELETE") {
             curl_easy_setopt(c, CURLOPT_CUSTOMREQUEST, "DELETE");
         } else if (req.method == "PATCH") {
             curl_easy_setopt(c, CURLOPT_CUSTOMREQUEST, "PATCH");
-            curl_easy_setopt(c, CURLOPT_POSTFIELDS,    req.body.c_str());
+            curl_easy_setopt(c, CURLOPT_POSTFIELDS, req.body.c_str());
             curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, (long)req.body.size());
         }
 
-        auto *hdrs = BuildHeaders(req.headers);
-        if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
+        auto* hdrs = BuildHeaders(req.headers);
+        if (hdrs)
+            curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
         CURLcode rc = curl_easy_perform(c);
         curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &resp.status);
-        if (hdrs) curl_slist_free_all(hdrs);
+        if (hdrs)
+            curl_slist_free_all(hdrs);
         curl_easy_cleanup(c);
 
-        if (rc != CURLE_OK || !ShouldRetry(resp.status, policy)) return resp;
-        if (attempt < policy.max_retries) WaitForRetry(attempt, policy);
+        if (rc != CURLE_OK || !ShouldRetry(resp.status, policy))
+            return resp;
+        if (attempt < policy.max_retries)
+            WaitForRetry(attempt, policy);
     }
     return {};
 }
 
 // ─── ReadRange ────────────────────────────────────────────────────────────────
-int64_t CloudHttpClient::ReadRange(const std::string &url,
-                                    const std::string &access_token,
-                                    int64_t offset, int64_t length,
-                                    char *out_buffer, std::string &err,
-                                    const CloudRetryPolicy &policy) {
+int64_t CloudHttpClient::ReadRange(const std::string& url, const std::string& access_token,
+                                   int64_t offset, int64_t length, char* out_buffer,
+                                   std::string& err, const CloudRetryPolicy& policy) {
     for (int attempt = 0; attempt <= policy.max_retries; ++attempt) {
         int64_t written = 0;
         BufCtx ctx{out_buffer, length, &written};
 
         HttpResponse resp_hdr; // for headers only
-        CURL *c = curl_easy_init();
-        curl_easy_setopt(c, CURLOPT_URL,          url.c_str());
-        curl_easy_setopt(c, CURLOPT_TIMEOUT,      120L);
+        CURL* c = curl_easy_init();
+        curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
         curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(c, CURLOPT_MAXREDIRS,    5L);
+        curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
         curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteBufCb);
-        curl_easy_setopt(c, CURLOPT_WRITEDATA,    &ctx);
+        curl_easy_setopt(c, CURLOPT_WRITEDATA, &ctx);
         curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, HeaderCb);
-        curl_easy_setopt(c, CURLOPT_HEADERDATA,   &resp_hdr);
+        curl_easy_setopt(c, CURLOPT_HEADERDATA, &resp_hdr);
 
         char range_hdr[64];
-        snprintf(range_hdr, sizeof(range_hdr),
-                 "Range: bytes=%lld-%lld",
-                 (long long)offset, (long long)(offset + length - 1));
+        snprintf(range_hdr, sizeof(range_hdr), "Range: bytes=%lld-%lld", (long long)offset,
+                 (long long)(offset + length - 1));
 
-        struct curl_slist *hdrs = nullptr;
+        struct curl_slist* hdrs = nullptr;
         hdrs = curl_slist_append(hdrs, range_hdr);
         if (!access_token.empty())
             hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + access_token).c_str());
@@ -159,14 +172,20 @@ int64_t CloudHttpClient::ReadRange(const std::string &url,
 
         if (rc != CURLE_OK) {
             err = std::string("curl: ") + curl_easy_strerror(rc);
-            if (attempt < policy.max_retries) { WaitForRetry(attempt, policy); continue; }
+            if (attempt < policy.max_retries) {
+                WaitForRetry(attempt, policy);
+                continue;
+            }
             return -1;
         }
         if (ShouldRetry(status, policy) && attempt < policy.max_retries) {
-            WaitForRetry(attempt, policy); continue;
+            WaitForRetry(attempt, policy);
+            continue;
         }
-        if (status == 206) return written;          // ideal path
-        if (status == 200) return std::min(written, length); // server ignored Range
+        if (status == 206)
+            return written; // ideal path
+        if (status == 200)
+            return std::min(written, length); // server ignored Range
         err = "ReadRange HTTP " + std::to_string(status);
         return -1;
     }
@@ -174,102 +193,151 @@ int64_t CloudHttpClient::ReadRange(const std::string &url,
 }
 
 // ─── Convenience wrappers ─────────────────────────────────────────────────────
-HttpResponse CloudHttpClient::Get(const std::string &url, const std::string &tok,
-                                   const std::string &range_hdr) {
-    HttpRequest r; r.url = url;
+HttpResponse CloudHttpClient::Get(const std::string& url, const std::string& tok,
+                                  const std::string& range_hdr) {
+    HttpRequest r;
+    r.url = url;
     r.SetBearerAuth(tok);
-    if (!range_hdr.empty()) r.headers["Range"] = range_hdr;
+    if (!range_hdr.empty())
+        r.headers["Range"] = range_hdr;
     return Execute(r);
 }
-HttpResponse CloudHttpClient::Post(const std::string &url, const std::string &tok,
-                                    const std::string &body, const std::string &ct) {
-    HttpRequest r; r.method = "POST"; r.url = url; r.body = body;
-    r.SetBearerAuth(tok); r.headers["Content-Type"] = ct;
+HttpResponse CloudHttpClient::Post(const std::string& url, const std::string& tok,
+                                   const std::string& body, const std::string& ct) {
+    HttpRequest r;
+    r.method = "POST";
+    r.url = url;
+    r.body = body;
+    r.SetBearerAuth(tok);
+    r.headers["Content-Type"] = ct;
     return Execute(r);
 }
-HttpResponse CloudHttpClient::Put(const std::string &url, const char *data, int64_t sz,
-                                   const std::unordered_map<std::string,std::string> &extra) {
-    HttpRequest r; r.method = "PUT"; r.url = url;
-    r.body_data = data; r.body_size = sz;
-    for (auto &[k,v] : extra) r.headers[k] = v;
-    char cl[32]; snprintf(cl, sizeof(cl), "%lld", (long long)sz);
+HttpResponse CloudHttpClient::Put(const std::string& url, const char* data, int64_t sz,
+                                  const std::unordered_map<std::string, std::string>& extra) {
+    HttpRequest r;
+    r.method = "PUT";
+    r.url = url;
+    r.body_data = data;
+    r.body_size = sz;
+    for (auto& [k, v] : extra)
+        r.headers[k] = v;
+    char cl[32];
+    snprintf(cl, sizeof(cl), "%lld", (long long)sz);
     r.headers["Content-Length"] = cl;
     return Execute(r);
 }
-HttpResponse CloudHttpClient::Delete(const std::string &url, const std::string &tok) {
-    HttpRequest r; r.method = "DELETE"; r.url = url; r.SetBearerAuth(tok);
+HttpResponse CloudHttpClient::Delete(const std::string& url, const std::string& tok) {
+    HttpRequest r;
+    r.method = "DELETE";
+    r.url = url;
+    r.SetBearerAuth(tok);
     return Execute(r);
 }
-HttpResponse CloudHttpClient::Patch(const std::string &url, const std::string &tok,
-                                     const std::string &body, const std::string &ct) {
-    HttpRequest r; r.method = "PATCH"; r.url = url; r.body = body;
-    r.SetBearerAuth(tok); r.headers["Content-Type"] = ct;
+HttpResponse CloudHttpClient::Patch(const std::string& url, const std::string& tok,
+                                    const std::string& body, const std::string& ct) {
+    HttpRequest r;
+    r.method = "PATCH";
+    r.url = url;
+    r.body = body;
+    r.SetBearerAuth(tok);
+    r.headers["Content-Type"] = ct;
     return Execute(r);
 }
 
 // ─── JsonUtil ─────────────────────────────────────────────────────────────────
-std::string JsonUtil::GetString(const std::string &json, const std::string &key) {
+std::string JsonUtil::GetString(const std::string& json, const std::string& key) {
     auto search = "\"" + key + "\"";
     auto pos = json.find(search);
-    if (pos == std::string::npos) return "";
+    if (pos == std::string::npos)
+        return "";
     pos = json.find(':', pos + search.size());
-    if (pos == std::string::npos) return "";
-    while (++pos < json.size() && (json[pos]==' '||json[pos]=='\t'));
-    if (pos >= json.size() || json[pos] != '"') return "";
+    if (pos == std::string::npos)
+        return "";
+    while (++pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
+        ;
+    if (pos >= json.size() || json[pos] != '"')
+        return "";
     ++pos;
     std::string val;
     while (pos < json.size() && json[pos] != '"') {
-        if (json[pos]=='\\' && pos+1 < json.size()) {
+        if (json[pos] == '\\' && pos + 1 < json.size()) {
             ++pos;
-            switch(json[pos]) {
-                case '"': val+='"'; break; case '\\': val+='\\'; break;
-                case 'n': val+='\n'; break; case 'r': val+='\r'; break;
-                case 't': val+='\t'; break; default: val+=json[pos]; break;
+            switch (json[pos]) {
+            case '"':
+                val += '"';
+                break;
+            case '\\':
+                val += '\\';
+                break;
+            case 'n':
+                val += '\n';
+                break;
+            case 'r':
+                val += '\r';
+                break;
+            case 't':
+                val += '\t';
+                break;
+            default:
+                val += json[pos];
+                break;
             }
-        } else val += json[pos];
+        } else
+            val += json[pos];
         ++pos;
     }
     return val;
 }
 
-int64_t JsonUtil::GetInt64(const std::string &json, const std::string &key) {
+int64_t JsonUtil::GetInt64(const std::string& json, const std::string& key) {
     auto search = "\"" + key + "\"";
     auto pos = json.find(search);
-    if (pos == std::string::npos) return 0;
+    if (pos == std::string::npos)
+        return 0;
     pos = json.find(':', pos + search.size());
-    if (pos == std::string::npos) return 0;
-    while (++pos < json.size() && (json[pos]==' '||json[pos]=='\t'));
+    if (pos == std::string::npos)
+        return 0;
+    while (++pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
+        ;
     return (int64_t)strtoll(json.c_str() + pos, nullptr, 10);
 }
 
-bool JsonUtil::GetBool(const std::string &json, const std::string &key) {
+bool JsonUtil::GetBool(const std::string& json, const std::string& key) {
     auto search = "\"" + key + "\"";
     auto pos = json.find(search);
-    if (pos == std::string::npos) return false;
+    if (pos == std::string::npos)
+        return false;
     pos = json.find(':', pos + search.size());
-    if (pos == std::string::npos) return false;
-    while (++pos < json.size() && (json[pos]==' '||json[pos]=='\t'));
+    if (pos == std::string::npos)
+        return false;
+    while (++pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
+        ;
     return json.substr(pos, 4) == "true";
 }
 
-std::vector<std::string> JsonUtil::GetArray(const std::string &json, const std::string &key) {
+std::vector<std::string> JsonUtil::GetArray(const std::string& json, const std::string& key) {
     std::vector<std::string> items;
     auto search = "\"" + key + "\"";
     auto pos = json.find(search);
-    if (pos == std::string::npos) return items;
+    if (pos == std::string::npos)
+        return items;
     pos = json.find('[', pos);
-    if (pos == std::string::npos) return items;
-    int depth = 0; std::string cur;
-    for (size_t i = pos + 1; i < json.size(); ++i) {  // start AFTER the [
+    if (pos == std::string::npos)
+        return items;
+    int depth = 0;
+    std::string cur;
+    for (size_t i = pos + 1; i < json.size(); ++i) { // start AFTER the [
         char ch = json[i];
         if (ch == '{') {
-            if (depth == 0) cur.clear();   // starting a new top-level item
+            if (depth == 0)
+                cur.clear(); // starting a new top-level item
             cur += ch;
             ++depth;
         } else if (ch == '}') {
             cur += ch;
             --depth;
-            if (depth == 0) items.push_back(cur);  // finished a top-level item
+            if (depth == 0)
+                items.push_back(cur); // finished a top-level item
         } else if (ch == ']' && depth == 0) {
             break;
         } else if (depth > 0) {
@@ -279,10 +347,11 @@ std::vector<std::string> JsonUtil::GetArray(const std::string &json, const std::
     return items;
 }
 
-std::string JsonUtil::MakeObject(const std::vector<std::pair<std::string,std::string>> &kv) {
+std::string JsonUtil::MakeObject(const std::vector<std::pair<std::string, std::string>>& kv) {
     std::string s = "{";
     for (size_t i = 0; i < kv.size(); ++i) {
-        if (i) s += ",";
+        if (i)
+            s += ",";
         s += "\"" + kv[i].first + "\":\"" + kv[i].second + "\"";
     }
     return s + "}";

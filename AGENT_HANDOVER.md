@@ -2,11 +2,16 @@
 
 ## What this is
 
-A DuckDB extension that registers `spfs://`, `odfs://`, `gdfs://`, `dbxfs://`, `sftp://`, and `vfs://` as first-class filesystem protocols — giving every cloud storage the same capabilities as `s3://`: Parquet, CSV, Delta Lake, Iceberg, glob patterns, COPY TO.
+A DuckDB extension that registers `spfs://`, `odfs://`, `gdfs://`, `dbxfs://`,
+`sftp://`, and `vfs://` as first-class filesystem protocols — giving every cloud
+storage the same capabilities as `s3://`: Parquet, CSV, Delta Lake, Iceberg,
+glob patterns, COPY TO.
 
-There is also `cloudfs-agent`: a ~8 MB static Go binary that turns any Linux/macOS server into a `vfs://` endpoint with bearer-token auth and HTTP range reads.
+There is also `cloudfs-agent`: a ~8 MB static Go binary that turns any
+Linux/macOS server into a `vfs://` endpoint with bearer-token auth and HTTP
+range reads.
 
----
+______________________________________________________________________
 
 ## Repository layout
 
@@ -56,7 +61,7 @@ duckdb-cloudfs/
         └── cloudfs_extension.cpp      ← entry point, wires everything together
 ```
 
----
+______________________________________________________________________
 
 ## Build instructions
 
@@ -77,45 +82,47 @@ build/release/extension/cloudfs/cloudfs.duckdb_extension
 ```
 
 **Load (unsigned, for development):**
+
 ```sql
 LOAD 'build/release/extension/cloudfs/cloudfs.duckdb_extension';
 ```
 
----
+______________________________________________________________________
 
 ## What works today (verified, 29/29 tests pass)
 
-| Feature | Status |
-|---|---|
-| `spfs://` SharePoint read/write/glob | ✅ |
-| `odfs://` OneDrive read/write/glob | ✅ |
-| `gdfs://` Google Drive read/write/glob | ✅ |
-| `dbxfs://` Dropbox read/write/glob | ✅ |
-| `sftp://` any Linux VPS read/write/glob | ✅ |
-| `vfs://` cloudfs-agent read/write/glob | ✅ |
-| `CREATE SECRET` for all providers | ✅ |
-| `providers()` scalar function | ✅ |
-| `clear_cache()` / `clear_cache(scheme)` | ✅ |
-| `cloudfs_version()` | ✅ |
-| Parquet, CSV, JSON, Delta, Iceberg | ✅ (via DuckDB format layer) |
-| HTTP Range reads (206 Partial Content) | ✅ |
-| Glob `**/*.parquet` recursive | ✅ |
-| `COPY TO` all providers | ✅ |
+| Feature                                 | Status                       |
+| --------------------------------------- | ---------------------------- |
+| `spfs://` SharePoint read/write/glob    | ✅                           |
+| `odfs://` OneDrive read/write/glob      | ✅                           |
+| `gdfs://` Google Drive read/write/glob  | ✅                           |
+| `dbxfs://` Dropbox read/write/glob      | ✅                           |
+| `sftp://` any Linux VPS read/write/glob | ✅                           |
+| `vfs://` cloudfs-agent read/write/glob  | ✅                           |
+| `CREATE SECRET` for all providers       | ✅                           |
+| `providers()` scalar function           | ✅                           |
+| `clear_cache()` / `clear_cache(scheme)` | ✅                           |
+| `cloudfs_version()`                     | ✅                           |
+| Parquet, CSV, JSON, Delta, Iceberg      | ✅ (via DuckDB format layer) |
+| HTTP Range reads (206 Partial Content)  | ✅                           |
+| Glob `**/*.parquet` recursive           | ✅                           |
+| `COPY TO` all providers                 | ✅                           |
 
----
+______________________________________________________________________
 
 ## Task 1 — Complete the table functions (PRIORITY)
 
-**What:** `ls()`, `stat()`, `du()` are implemented in `cloud_table_functions.cpp`
-but the last compilation attempt was interrupted. The code compiles but returns
-0 rows because the `CloudFileSystem*` pointer is not correctly reaching the bind
-function.
+**What:** `ls()`, `stat()`, `du()` are implemented in
+`cloud_table_functions.cpp` but the last compilation attempt was interrupted.
+The code compiles but returns 0 rows because the `CloudFileSystem*` pointer is
+not correctly reaching the bind function.
 
 **Root cause:** The last patch introduced `SetCloudFS(cfs)` + a module-level
-`g_tf_cfs` variable to replace a fragile `TableFunctionInfo::Cast` chain.
-The patch was applied to the source files but not compiled and tested.
+`g_tf_cfs` variable to replace a fragile `TableFunctionInfo::Cast` chain. The
+patch was applied to the source files but not compiled and tested.
 
 **Files to touch:**
+
 - `src/core/cloud_table_functions.cpp`
 - `src/include/core/cloud_table_functions.hpp`
 - `src/extension/cloudfs_extension.cpp`
@@ -123,6 +130,7 @@ The patch was applied to the source files but not compiled and tested.
 **Current state of the three files** (look for these patterns):
 
 `cloud_table_functions.cpp` should have near the top:
+
 ```cpp
 static CloudFileSystem *g_tf_cfs = nullptr;
 void SetCloudFS(CloudFileSystem *cfs) { g_tf_cfs = cfs; }
@@ -130,19 +138,21 @@ static CloudFileSystem *GetCFS(optional_ptr<TableFunctionInfo>) { return g_tf_cf
 ```
 
 `cloud_table_functions.hpp` should declare:
+
 ```cpp
 void SetCloudFS(CloudFileSystem *cfs);
 void RegisterCloudTableFunctions(ExtensionLoader &loader);
 ```
 
 `cloudfs_extension.cpp` should call (near the end of LoadInternal):
+
 ```cpp
 SetCloudFS(g_cfs);
 RegisterCloudTableFunctions(loader);
 ```
 
-**Verify** the above three patterns are present. If any is missing, add it.
-Then compile and test:
+**Verify** the above three patterns are present. If any is missing, add it. Then
+compile and test:
 
 ```bash
 touch src/core/cloud_table_functions.cpp src/extension/cloudfs_extension.cpp
@@ -167,6 +177,7 @@ SELECT directory, file_count, size_pretty FROM du('vfs://localhost:9876/');
 ```
 
 **Expected output for `ls()`:**
+
 ```
 ┌────────────┬─────────┬─────────────┐
 │ name       │ type    │ size_pretty │
@@ -175,7 +186,7 @@ SELECT directory, file_count, size_pretty FROM du('vfs://localhost:9876/');
 └────────────┴─────────┴─────────────┘
 ```
 
----
+______________________________________________________________________
 
 ## Task 2 — The full test suite
 
@@ -241,7 +252,7 @@ print("All tests passed")
 EOF
 ```
 
----
+______________________________________________________________________
 
 ## Task 3 — Adding a new provider
 
@@ -295,19 +306,19 @@ src/providers/azure/azure_backend.cpp
 
 That's it. No framework files change.
 
----
+______________________________________________________________________
 
 ## Known issues / bugs fixed during development
 
-| Bug | Fix |
-|---|---|
-| `Throw("") → IOException("")` (throws on success) | `Throw()` now no-ops on empty string |
+| Bug                                                 | Fix                                                      |
+| --------------------------------------------------- | -------------------------------------------------------- |
+| `Throw("") → IOException("")` (throws on success)   | `Throw()` now no-ops on empty string                     |
 | `star_pos` offset applied to wrong string in `Glob` | Use `path.find_first_of("*?[")` not `item_path`'s offset |
-| `CanSeek/Seek/SeekPosition` not overridden | Added to `CloudFileSystem` |
-| `JsonUtil::GetArray` depth check off-by-one | Changed `depth==1` to `depth==0` for push/clear |
-| Glob function corrupted by debug cleanup | Rewritten clean in one shot |
+| `CanSeek/Seek/SeekPosition` not overridden          | Added to `CloudFileSystem`                               |
+| `JsonUtil::GetArray` depth check off-by-one         | Changed `depth==1` to `depth==0` for push/clear          |
+| Glob function corrupted by debug cleanup            | Rewritten clean in one shot                              |
 
----
+______________________________________________________________________
 
 ## Secret syntax reference
 
@@ -340,7 +351,7 @@ CREATE SECRET name (TYPE sftp, PROVIDER keyfile|agent|password,
 CREATE SECRET name (TYPE vfs, PROVIDER token, TOKEN '...');
 ```
 
----
+______________________________________________________________________
 
 ## cloudfs-agent deployment
 
@@ -364,7 +375,7 @@ docker run -e TOKEN="$TOKEN" -p 8765:8765 -v /data:/data cloudfs-agent \
     --token "$TOKEN" --root /data
 ```
 
----
+______________________________________________________________________
 
 ## Architecture in one diagram
 
@@ -387,7 +398,7 @@ CloudFileSystem  ← registered with DuckDB's VirtualFileSystem
         CloudSecretRegistry   ← 16-slot dispatch → CREATE SECRET handlers
 ```
 
----
+______________________________________________________________________
 
 ## Task 4 — Publicar no DuckDB Community Extensions
 
@@ -403,17 +414,22 @@ SELECT * FROM ls('spfs://empresa.sharepoint.com/sites/X/Docs/');
 
 - Repositório **público** no GitHub
 - Licença open-source (MIT, Apache-2.0, etc.)
-- Build funcionando via `duckdb/extension-template` (já está — `extension_config.cmake` existe)
+- Build funcionando via `duckdb/extension-template` (já está —
+  `extension_config.cmake` existe)
 
 ### Passo a passo
 
 #### 1. Garantir que o repositório está baseado no extension-template
 
-O projeto já usa o template. Verifique que o CI do GitHub Actions builda com sucesso para todas as plataformas antes de submeter. O workflow do template compila automaticamente para Linux x86-64, Linux ARM64, macOS Intel, macOS Apple Silicon, Windows e WebAssembly.
+O projeto já usa o template. Verifique que o CI do GitHub Actions builda com
+sucesso para todas as plataformas antes de submeter. O workflow do template
+compila automaticamente para Linux x86-64, Linux ARM64, macOS Intel, macOS Apple
+Silicon, Windows e WebAssembly.
 
 #### 2. Criar o arquivo `description.yml`
 
-Abra um pull request no Community Extensions Repository com um único arquivo `description.yml` na pasta `extensions/cloudfs`.
+Abra um pull request no Community Extensions Repository com um único arquivo
+`description.yml` na pasta `extensions/cloudfs`.
 
 Conteúdo do arquivo para este projeto:
 
@@ -484,17 +500,26 @@ Arquivo:     extensions/cloudfs/description.yml
 Branch:      main
 ```
 
-O Community Repository builda extensões usando o CI toolchain do DuckDB. Como o projeto é baseado no extension-template, isso funciona automaticamente.
+O Community Repository builda extensões usando o CI toolchain do DuckDB. Como o
+projeto é baseado no extension-template, isso funciona automaticamente.
 
 #### 4. Aguardar build e aprovação
 
-O CI vai buildar e testar a extensão. Os checks são alinhados com o repositório extension-template, então iterações podem ser feitas de forma independente. Aguardar aprovação dos maintainers do Community Extensions Repository e o build completar.
+O CI vai buildar e testar a extensão. Os checks são alinhados com o repositório
+extension-template, então iterações podem ser feitas de forma independente.
+Aguardar aprovação dos maintainers do Community Extensions Repository e o build
+completar.
 
-O build compila para todas as plataformas (~20 min). Se falhar, o CI mostra logs detalhados por plataforma.
+O build compila para todas as plataformas (~20 min). Se falhar, o CI mostra logs
+detalhados por plataforma.
 
 #### 5. Manter a extensão entre releases do DuckDB
 
-Quando o próximo release do DuckDB se aproxima, o repositório `duckdb/community-extensions` passa a testar extensões tanto versus o último release estável quanto contra a branch `main`. Se a extensão não é compatível com ambos simultaneamente, o caminho recomendado é manter duas branches e fornecer o hash do commit estável como `ref` e o da branch main como `ref_next`.
+Quando o próximo release do DuckDB se aproxima, o repositório
+`duckdb/community-extensions` passa a testar extensões tanto versus o último
+release estável quanto contra a branch `main`. Se a extensão não é compatível
+com ambos simultaneamente, o caminho recomendado é manter duas branches e
+fornecer o hash do commit estável como `ref` e o da branch main como `ref_next`.
 
 ```yaml
 # Quando um novo DuckDB está sendo preparado:
@@ -504,29 +529,38 @@ repo:
   ref_next: def456ghi  # compatível com DuckDB main (próximo release)
 ```
 
-A lista de Community Extensions disponíveis para o último release estável pode ser consultada em `https://duckdb.org/community_extensions/list_of_extensions`.
+A lista de Community Extensions disponíveis para o último release estável pode
+ser consultada em `https://duckdb.org/community_extensions/list_of_extensions`.
 
 #### 6. Página de documentação auto-gerada
 
-Cada Community Extension tem uma página de documentação em `https://duckdb.org/community_extensions/extensions/cloudfs`. As páginas são geradas a partir dos campos do descriptor YAML e das mudanças auto-detectadas que a extensão introduz no DuckDB — novas funções, overloads, settings e tipos são detectados automaticamente.
+Cada Community Extension tem uma página de documentação em
+`https://duckdb.org/community_extensions/extensions/cloudfs`. As páginas são
+geradas a partir dos campos do descriptor YAML e das mudanças auto-detectadas
+que a extensão introduz no DuckDB — novas funções, overloads, settings e tipos
+são detectados automaticamente.
 
 ### Checklist completo
 
-| Etapa | Ação |
-|---|---|
-| Código | Build limpo no extension-template CI |
-| Repositório | Público no GitHub, licença MIT/Apache |
-| SHA | Pinnar commit exato (não branch) em `repo.ref` |
-| `description.yml` | Criar em `extensions/cloudfs/description.yml` |
-| PR | Abrir em `github.com/duckdb/community-extensions` |
-| CI | Aguardar build para todas as plataformas (~20 min) |
-| Review | Responder comentários dos maintainers |
-| Manutenção | Atualizar `ref`/`ref_next` a cada release DuckDB |
+| Etapa             | Ação                                               |
+| ----------------- | -------------------------------------------------- |
+| Código            | Build limpo no extension-template CI               |
+| Repositório       | Público no GitHub, licença MIT/Apache              |
+| SHA               | Pinnar commit exato (não branch) em `repo.ref`     |
+| `description.yml` | Criar em `extensions/cloudfs/description.yml`      |
+| PR                | Abrir em `github.com/duckdb/community-extensions`  |
+| CI                | Aguardar build para todas as plataformas (~20 min) |
+| Review            | Responder comentários dos maintainers              |
+| Manutenção        | Atualizar `ref`/`ref_next` a cada release DuckDB   |
 
 ### Suporte
 
-Para dúvidas sobre desenvolvimento de extensões, existe um canal dedicado no servidor Discord do DuckDB. É um bom lugar para obter ajuda de outros desenvolvedores de extensões e do time central do DuckDB.
+Para dúvidas sobre desenvolvimento de extensões, existe um canal dedicado no
+servidor Discord do DuckDB. É um bom lugar para obter ajuda de outros
+desenvolvedores de extensões e do time central do DuckDB.
 
-Discord: https://discord.com/invite/tcvwpjfnZx  
-Community Extensions repo: https://github.com/duckdb/community-extensions  
-Extension template: https://github.com/duckdb/extension-template
+Discord: https://discord.com/invite/tcvwpjfnZx\
+Community Extensions repo:
+https://github.com/duckdb/community-extensions\
+Extension template:
+https://github.com/duckdb/extension-template

@@ -54,12 +54,12 @@ fi
 # Commit 1 (opcional): Estrutura inicial do projeto
 if [ "$FIRST_COMMIT" = true ]; then
     echo "📝 Commit 1: Estrutura inicial do projeto"
-    
+
     # Adicionar estrutura base
     git add CMakeLists.txt extension_config.cmake vcpkg.json 2>/dev/null || true
     git add src/ docs/ agent/ test/ 2>/dev/null || true
     git add AGENT_HANDOVER.md 2>/dev/null || true
-    
+
     git commit -m "chore: initial CloudFS DuckDB extension structure
 
 Add base structure for CloudFS extension:
@@ -74,7 +74,7 @@ Add base structure for CloudFS extension:
 This is a DuckDB extension that registers cloud storage protocols
 (spfs://, odfs://, gdfs://, dbxfs://, sftp://, vfs://) as first-class
 filesystems with support for Parquet, CSV, Delta Lake, and Iceberg."
-    
+
     echo "✓ Estrutura inicial commitada"
     echo ""
 fi

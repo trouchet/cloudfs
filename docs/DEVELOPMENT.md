@@ -9,7 +9,7 @@
 - [Testing](#testing)
 - [Common Tasks](#common-tasks)
 
----
+______________________________________________________________________
 
 ## 🚀 Setup
 
@@ -21,6 +21,7 @@ chmod +x setup_dev_tools.sh
 ```
 
 This script installs:
+
 - ✅ Python 3 + pip
 - ✅ Node.js + npm
 - ✅ pre-commit
@@ -43,7 +44,7 @@ pre-commit run --all-files
 echo "test: invalid commit" | npx commitlint
 ```
 
----
+______________________________________________________________________
 
 ## 📝 Commit Guidelines
 
@@ -59,19 +60,19 @@ echo "test: invalid commit" | npx commitlint
 
 ### Valid Types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `feat` | New feature | `feat(gdrive): add resumable uploads` |
-| `fix` | Bug fix | `fix(table-functions): handle null pointers` |
-| `docs` | Documentation only | `docs(readme): update build instructions` |
-| `style` | Code style changes | `style(core): fix indentation` |
-| `refactor` | Code refactoring | `refactor(cache): simplify LRU logic` |
-| `perf` | Performance improvements | `perf(http): reduce connection overhead` |
-| `test` | Add or update tests | `test(providers): add OneDrive auth tests` |
-| `build` | Build system changes | `build(cmake): update DuckDB version` |
-| `ci` | CI configuration | `ci(github): add clang-tidy workflow` |
-| `chore` | Maintenance tasks | `chore(deps): update vcpkg packages` |
-| `revert` | Revert previous commit | `revert: "feat(gdrive): add batch API"` |
+| Type       | Description              | Example                                      |
+| ---------- | ------------------------ | -------------------------------------------- |
+| `feat`     | New feature              | `feat(gdrive): add resumable uploads`        |
+| `fix`      | Bug fix                  | `fix(table-functions): handle null pointers` |
+| `docs`     | Documentation only       | `docs(readme): update build instructions`    |
+| `style`    | Code style changes       | `style(core): fix indentation`               |
+| `refactor` | Code refactoring         | `refactor(cache): simplify LRU logic`        |
+| `perf`     | Performance improvements | `perf(http): reduce connection overhead`     |
+| `test`     | Add or update tests      | `test(providers): add OneDrive auth tests`   |
+| `build`    | Build system changes     | `build(cmake): update DuckDB version`        |
+| `ci`       | CI configuration         | `ci(github): add clang-tidy workflow`        |
+| `chore`    | Maintenance tasks        | `chore(deps): update vcpkg packages`         |
+| `revert`   | Revert previous commit   | `revert: "feat(gdrive): add batch API"`      |
 
 ### Valid Scopes
 
@@ -98,6 +99,7 @@ echo "test: invalid commit" | npx commitlint
 ### Rules
 
 ✅ **DO**:
+
 - Use lowercase for type and scope
 - Use imperative mood ("add" not "added")
 - Keep subject line under 100 characters
@@ -105,6 +107,7 @@ echo "test: invalid commit" | npx commitlint
 - Wrap body at 100 characters
 
 ❌ **DON'T**:
+
 - End subject line with period
 - Use past tense
 - Include issue numbers in subject (put in footer)
@@ -114,11 +117,13 @@ echo "test: invalid commit" | npx commitlint
 ### Examples
 
 #### Simple Commit
+
 ```bash
 git commit -m "fix(table-functions): handle empty directory paths"
 ```
 
 #### Commit with Body
+
 ```bash
 git commit -m "feat(onedrive): add delta sync support
 
@@ -129,6 +134,7 @@ Closes #123"
 ```
 
 #### Breaking Change
+
 ```bash
 git commit -m "feat(auth)!: change OAuth flow to PKCE
 
@@ -136,24 +142,27 @@ BREAKING CHANGE: OAuth tokens now use PKCE flow. Existing tokens
 will need to be regenerated."
 ```
 
----
+______________________________________________________________________
 
 ## 🎨 Code Style
 
 ### C++ Style
 
 We use **clang-format** with LLVM-based style:
+
 - Indent: 4 spaces
 - Line length: 100 characters
 - Pointer alignment: left (`int* ptr`)
 - Braces: attached style
 
 **Format all C++ files**:
+
 ```bash
 npm run format:cpp
 ```
 
 **Format single file**:
+
 ```bash
 clang-format -i src/core/cloud_filesystem.cpp
 ```
@@ -164,6 +173,7 @@ clang-format -i src/core/cloud_filesystem.cpp
 - Commands: lowercase
 
 **Format CMakeLists.txt**:
+
 ```bash
 npm run format:cmake
 ```
@@ -174,17 +184,19 @@ npm run format:cmake
 - Use shellcheck for linting
 
 **Check shell scripts**:
+
 ```bash
 npm run check:shell
 ```
 
----
+______________________________________________________________________
 
 ## 🪝 Pre-commit Hooks
 
 ### What Gets Checked
 
 #### On Every Commit:
+
 - ✅ File size (max 1MB)
 - ✅ End of file newlines
 - ✅ Trailing whitespace
@@ -198,6 +210,7 @@ npm run check:shell
 - ✅ Go formatting (for agent/)
 
 #### On Commit Message:
+
 - ✅ Conventional commit format
 - ✅ Valid type and scope
 - ✅ Length limits
@@ -228,7 +241,7 @@ pre-commit install --hook-type pre-commit
 pre-commit install --hook-type commit-msg
 ```
 
----
+______________________________________________________________________
 
 ## 🧪 Testing
 
@@ -261,24 +274,27 @@ npm run lint
 echo "fix(core): your message" | npx commitlint
 ```
 
----
+______________________________________________________________________
 
 ## 🔧 Common Tasks
 
 ### Add a New Provider
 
 1. Create provider files:
+
    ```bash
    touch src/providers/newprovider/newprovider_backend.cpp
    touch src/include/providers/newprovider_backend.hpp
    ```
 
-2. Format code:
+1. Format code:
+
    ```bash
    clang-format -i src/providers/newprovider/*
    ```
 
-3. Commit:
+1. Commit:
+
    ```bash
    git add src/providers/newprovider/
    git commit -m "feat(providers): add NewProvider backend"
@@ -325,7 +341,7 @@ pre-commit run --all-files --show-diff-on-failure
 SKIP=clang-format git commit -m "fix: emergency fix"
 ```
 
----
+______________________________________________________________________
 
 ## 🚨 Troubleshooting
 
@@ -349,17 +365,20 @@ brew install clang-format
 ### "pre-commit hook failed"
 
 1. Check what failed:
+
    ```bash
    pre-commit run --all-files
    ```
 
-2. Auto-fix formatting:
+1. Auto-fix formatting:
+
    ```bash
    npm run format:cpp
    git add -u
    ```
 
-3. If still failing, check specific file:
+1. If still failing, check specific file:
+
    ```bash
    clang-format --dry-run --Werror src/path/to/file.cpp
    ```
@@ -376,7 +395,7 @@ detect-secrets scan --baseline .secrets.baseline
 # pragma: allowlist secret
 ```
 
----
+______________________________________________________________________
 
 ## 📚 Additional Resources
 
@@ -386,7 +405,7 @@ detect-secrets scan --baseline .secrets.baseline
 - [clang-format Style Options](https://clang.llvm.org/docs/ClangFormatStyleOptions.html)
 - [DuckDB Extension Development](https://duckdb.org/docs/extensions/overview)
 
----
+______________________________________________________________________
 
 ## ✅ Checklist for Contributors
 
@@ -400,6 +419,6 @@ Before submitting a PR:
 - [ ] No secrets committed (`detect-secrets scan`)
 - [ ] Branch is up to date with main/master
 
----
+______________________________________________________________________
 
 **Happy coding! 🚀**

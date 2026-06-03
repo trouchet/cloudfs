@@ -15,10 +15,10 @@ NC='\033[0m' # No Color
 # Check OS
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     OS="linux"
-    PKG_MANAGER="apt-get"
+    export PKG_MANAGER="apt-get"
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     OS="macos"
-    PKG_MANAGER="brew"
+    export PKG_MANAGER="brew"
 else
     echo -e "${RED}❌ Unsupported OS: $OSTYPE${NC}"
     exit 1

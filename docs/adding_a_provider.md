@@ -1,11 +1,11 @@
 # How to Add a New Cloud Storage Provider
 
-Adding a provider to `cloudfs` requires touching **zero** framework files.
-You implement one C++ class, two optional auth classes, and register everything
-in a single `Init()` function.  The full `CloudFileSystem`, caching, glob,
-error handling, and DuckDB integration continue to work unchanged.
+Adding a provider to `cloudfs` requires touching **zero** framework files. You
+implement one C++ class, two optional auth classes, and register everything in a
+single `Init()` function. The full `CloudFileSystem`, caching, glob, error
+handling, and DuckDB integration continue to work unchanged.
 
----
+______________________________________________________________________
 
 ## Step 1 — Create your backend header
 
@@ -153,20 +153,20 @@ SELECT * FROM read_parquet('myfs://my-bucket/data/**/*.parquet');
 COPY (SELECT ...) TO 'myfs://my-bucket/exports/result.parquet';
 ```
 
----
+______________________________________________________________________
 
 ## Capability matrix — what to implement vs. what the framework handles
 
-| Task | Your code | Framework |
-|---|---|---|
-| URL parsing | `ParseUrl()` | — |
-| Auth / token refresh | `ICloudAuthProvider` | Calls your `GetAccessToken()` |
-| File metadata | `Stat()` | Caches result 15 min |
-| Byte-range reads | `ReadRange()` | Handles fallback, retry, refresh |
-| Pagination | `ListFolder()` (cursor loop) | Drives the loop for Glob |
-| Glob `**/*.parquet` | — (free) | Uses `ListFolder()` + fnmatch |
-| Chunked upload | `CreateUploadSession()` + `UploadChunk()` | Buffers, aligns, flushes |
-| Error retry | — (free) | `CloudHttpClient` retries 429/503 |
-| Cache invalidation | — (free) | Automatic on write/delete |
-| DuckDB FileSystem API | — (free) | `CloudFileSystem` implements all |
-| Parquet / CSV / Delta | — (free) | DuckDB format layer, unchanged |
+| Task                  | Your code                                 | Framework                         |
+| --------------------- | ----------------------------------------- | --------------------------------- |
+| URL parsing           | `ParseUrl()`                              | —                                 |
+| Auth / token refresh  | `ICloudAuthProvider`                      | Calls your `GetAccessToken()`     |
+| File metadata         | `Stat()`                                  | Caches result 15 min              |
+| Byte-range reads      | `ReadRange()`                             | Handles fallback, retry, refresh  |
+| Pagination            | `ListFolder()` (cursor loop)              | Drives the loop for Glob          |
+| Glob `**/*.parquet`   | — (free)                                  | Uses `ListFolder()` + fnmatch     |
+| Chunked upload        | `CreateUploadSession()` + `UploadChunk()` | Buffers, aligns, flushes          |
+| Error retry           | — (free)                                  | `CloudHttpClient` retries 429/503 |
+| Cache invalidation    | — (free)                                  | Automatic on write/delete         |
+| DuckDB FileSystem API | — (free)                                  | `CloudFileSystem` implements all  |
+| Parquet / CSV / Delta | — (free)                                  | DuckDB format layer, unchanged    |

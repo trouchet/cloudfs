@@ -2,20 +2,28 @@
 
 ## ✅ Correções Aplicadas (2026-06-03 08:22)
 
-Foram identificados e corrigidos 3 problemas críticos que impediam as table functions de funcionarem:
+Foram identificados e corrigidos 3 problemas críticos que impediam as table
+functions de funcionarem:
 
 ### Problema 1: Header sem declaração de SetCloudFS
-**Arquivo**: `src/include/core/cloud_table_functions.hpp`
-**Fix**: Adicionada declaração `void SetCloudFS(CloudFileSystem *cfs);`
 
-### Problema 2: Assinatura incompatível entre header e implementação  
-**Arquivo**: `src/include/core/cloud_table_functions.hpp`  
-**Fix**: Mudado de `void RegisterCloudTableFunctions(ExtensionLoader &loader, CloudFileSystem *cfs);`  
-Para: `void RegisterCloudTableFunctions(ExtensionLoader &loader);`
+**Arquivo**: `src/include/core/cloud_table_functions.hpp` **Fix**: Adicionada
+declaração `void SetCloudFS(CloudFileSystem *cfs);`
+
+### Problema 2: Assinatura incompatível entre header e implementação
+
+**Arquivo**: `src/include/core/cloud_table_functions.hpp`\
+**Fix**: Mudado de
+`void RegisterCloudTableFunctions(ExtensionLoader &loader, CloudFileSystem *cfs);`\
+Para:
+`void RegisterCloudTableFunctions(ExtensionLoader &loader);`
 
 ### Problema 3: Table functions registradas com nullptr
-**Arquivo**: `src/core/cloud_table_functions.cpp` (linha ~399)  
-**Fix**: Mudado de:
+
+**Arquivo**: `src/core/cloud_table_functions.cpp` (linha ~399)\
+**Fix**: Mudado
+de:
+
 ```cpp
 void RegisterCloudTableFunctions(ExtensionLoader &loader) {
     loader.RegisterFunction(LsTableFunction(nullptr));
@@ -23,7 +31,9 @@ void RegisterCloudTableFunctions(ExtensionLoader &loader) {
     loader.RegisterFunction(DuTableFunction(nullptr));
 }
 ```
+
 Para:
+
 ```cpp
 void RegisterCloudTableFunctions(ExtensionLoader &loader) {
     loader.RegisterFunction(LsTableFunction(g_tf_cfs));
@@ -34,14 +44,15 @@ void RegisterCloudTableFunctions(ExtensionLoader &loader) {
 
 ## 🔨 Status de Compilação
 
-**Arquivos fonte modificados**: 08:22 (hoje)
-**Binário existente**: 07:41 (desatualizado)
+**Arquivos fonte modificados**: 08:22 (hoje) **Binário existente**: 07:41
+(desatualizado)
 
 ⚠️ **As mudanças precisam ser compiladas para testar**
 
 ## 📋 Comandos para Compilar e Testar
 
 ### Passo 1: Instalar dependências (se necessário)
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential cmake ninja-build \
@@ -49,6 +60,7 @@ sudo apt-get install -y build-essential cmake ninja-build \
 ```
 
 ### Passo 2: Compilar (assumindo que tem submodule duckdb/)
+
 ```bash
 cd /home/pingu/github/cloudfs
 
@@ -63,6 +75,7 @@ cd ..
 ```
 
 ### Passo 3: Testar as table functions
+
 ```bash
 cd /home/pingu/github/cloudfs
 
@@ -105,6 +118,7 @@ rm -rf /tmp/vfs_test
 ### Resultado Esperado
 
 **ls() deve retornar:**
+
 ```
 ┌───────────┬──────────┬─────────────┐
 │   name    │   type   │ size_pretty │
@@ -114,6 +128,7 @@ rm -rf /tmp/vfs_test
 ```
 
 **stat() deve retornar:**
+
 ```
 ┌───────────┬──────┬──────────┐
 │   name    │ size │   type   │
@@ -123,6 +138,7 @@ rm -rf /tmp/vfs_test
 ```
 
 **du() deve retornar:**
+
 ```
 ┌─────────────────────────────┬────────────┬─────────────┐
 │         directory           │ file_count │ size_pretty │
@@ -147,6 +163,7 @@ grep -A 4 "void RegisterCloudTableFunctions" src/core/cloud_table_functions.cpp 
 ```
 
 **Output esperado:**
+
 ```
 54:void SetCloudFS(CloudFileSystem *cfs);
 60:void RegisterCloudTableFunctions(ExtensionLoader &loader);
@@ -158,12 +175,14 @@ grep -A 4 "void RegisterCloudTableFunctions" src/core/cloud_table_functions.cpp 
 
 ## ✅ Confirmação Visual
 
-Se os greps acima retornarem os valores esperados, **as correções estão aplicadas corretamente**.
+Se os greps acima retornarem os valores esperados, **as correções estão
+aplicadas corretamente**.
 
 Resta apenas:
-1. ✅ Código fonte corrigido 
-2. ⏳ Compilar
-3. ⏳ Testar
+
+1. ✅ Código fonte corrigido
+1. ⏳ Compilar
+1. ⏳ Testar
 
 ## 🚧 Bloqueadores Atuais
 
@@ -174,18 +193,20 @@ Resta apenas:
 ## 📝 Próximos Passos Recomendados
 
 1. **Instalar build tools** (requer sudo):
+
    ```bash
    sudo apt-get install -y build-essential cmake ninja-build \
         libcurl4-openssl-dev libssl-dev libssh2-1-dev
    ```
 
-2. **Verificar estrutura do projeto**:
+1. **Verificar estrutura do projeto**:
+
    - Se há submodule `duckdb/` → usar `make release`
    - Se não → precisará clonar projeto corretamente com `--recursive`
 
-3. **Compilar** com o comando adequado
+1. **Compilar** com o comando adequado
 
-4. **Testar** com o script de teste fornecido
+1. **Testar** com o script de teste fornecido
 
 ## 🔗 Referências
 

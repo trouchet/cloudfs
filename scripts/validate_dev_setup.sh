@@ -98,7 +98,7 @@ echo -e "${BOLD}4. Validating recent commits...${NC}"
 
 if git rev-parse HEAD &> /dev/null; then
     LAST_COMMIT=$(git log -1 --pretty=%B 2>/dev/null)
-    
+
     if echo "$LAST_COMMIT" | npx commitlint &> /dev/null; then
         echo -e "${GREEN}✓${NC} Last commit message is valid"
     else
@@ -119,7 +119,7 @@ if command -v clang-format &> /dev/null; then
     # Find C++ files that need formatting
     UNFORMATTED=$(find src -name '*.cpp' -o -name '*.hpp' 2>/dev/null | \
                   xargs clang-format --dry-run --Werror 2>&1 || true)
-    
+
     if [ -z "$UNFORMATTED" ]; then
         echo -e "${GREEN}✓${NC} All C++ files are properly formatted"
     else
@@ -138,7 +138,7 @@ echo -e "${BOLD}6. Checking shell scripts...${NC}"
 
 if command -v shellcheck &> /dev/null; then
     SHELL_ERRORS=$(shellcheck *.sh 2>&1 || true)
-    
+
     if [ -z "$SHELL_ERRORS" ]; then
         echo -e "${GREEN}✓${NC} All shell scripts pass shellcheck"
     else

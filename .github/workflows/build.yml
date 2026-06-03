@@ -98,7 +98,7 @@ jobs:
         run: |
           make release
 
-      - name: Test extension  
+      - name: Test extension
         shell: bash
         run: |
           make test

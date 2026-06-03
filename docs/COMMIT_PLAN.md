@@ -1,37 +1,45 @@
 # 📋 Plano de Commits - CloudFS Table Functions Fix
 
-Este documento define a estratégia de commits atômicos para as correções da Task 1 (table functions) do projeto CloudFS.
+Este documento define a estratégia de commits atômicos para as correções da Task
+1 (table functions) do projeto CloudFS.
 
----
+______________________________________________________________________
 
 ## 🎯 Objetivo
 
-Dividir as mudanças em commits pequenos, focados e semanticamente coerentes, facilitando:
+Dividir as mudanças em commits pequenos, focados e semanticamente coerentes,
+facilitando:
+
 - ✅ Code review
 - ✅ Debugging (git bisect)
 - ✅ Reversão seletiva
 - ✅ Histórico compreensível
 
----
+______________________________________________________________________
 
 ## 📦 Commits Propostos
 
 ### Commit 1: `fix(table-functions): wire CloudFileSystem pointer to table functions`
 
-**Problema**: As table functions `ls()`, `stat()` e `du()` retornavam 0 linhas porque recebiam `nullptr` ao invés do ponteiro válido para `CloudFileSystem`.
+**Problema**: As table functions `ls()`, `stat()` e `du()` retornavam 0 linhas
+porque recebiam `nullptr` ao invés do ponteiro válido para `CloudFileSystem`.
 
-**Solução**: 
+**Solução**:
+
 1. Adicionar declaração `SetCloudFS()` no header
-2. Corrigir assinatura de `RegisterCloudTableFunctions()` (remover parâmetro CloudFileSystem*)
-3. Usar `g_tf_cfs` ao invés de `nullptr` na registro das funções
+1. Corrigir assinatura de `RegisterCloudTableFunctions()` (remover parâmetro
+   CloudFileSystem\*)
+1. Usar `g_tf_cfs` ao invés de `nullptr` na registro das funções
 
 **Arquivos**:
+
 ```
 src/include/core/cloud_table_functions.hpp
 src/core/cloud_table_functions.cpp
 ```
 
 **Comando**:
+
 ```bash
 git add src/include/core/cloud_table_functions.hpp \
         src/core/cloud_table_functions.cpp
@@ -53,23 +61,27 @@ Fixes: Table functions now work correctly with DuckDB v1.4.0+
 Related: AGENT_HANDOVER.md Task 1"
 ```
 
----
+______________________________________________________________________
 
 ### Commit 2: `docs: add comprehensive build and test documentation`
 
-**Objetivo**: Documentar o processo de build, testes e troubleshooting para desenvolvedores.
+**Objetivo**: Documentar o processo de build, testes e troubleshooting para
+desenvolvedores.
 
 **Conteúdo**:
+
 - Guia rápido de build (`BUILD_QUICKSTART.md`)
 - Status detalhado da Task 1 com procedimentos de teste (`TASK1_STATUS.md`)
 
 **Arquivos**:
+
 ```
 BUILD_QUICKSTART.md
 TASK1_STATUS.md
 ```
 
 **Comando**:
+
 ```bash
 git add BUILD_QUICKSTART.md TASK1_STATUS.md
 git commit -m "docs: add comprehensive build and test documentation
@@ -93,23 +105,27 @@ These guides address the DuckDB v0.0.1 -> v1.4.0 migration and document
 the table functions fix from Task 1."
 ```
 
----
+______________________________________________________________________
 
 ### Commit 3: `chore: add build and dependency check scripts`
 
-**Objetivo**: Automatizar o processo de build, testes e verificação de dependências.
+**Objetivo**: Automatizar o processo de build, testes e verificação de
+dependências.
 
 **Conteúdo**:
+
 - Script completo de build + testes (`build_and_test.sh`)
 - Script de verificação de dependências (`check_deps.sh`)
 
 **Arquivos**:
+
 ```
 build_and_test.sh
 check_deps.sh
 ```
 
 **Comando**:
+
 ```bash
 git add build_and_test.sh check_deps.sh
 git commit -m "chore: add build and dependency check scripts
@@ -136,13 +152,15 @@ Usage:
   ./build_and_test.sh      # build + test"
 ```
 
----
+______________________________________________________________________
 
 ### Commit 4 (Opcional): `chore: add initial project structure`
 
-**Objetivo**: Se este for o primeiro commit do repositório, adicionar a estrutura base do projeto.
+**Objetivo**: Se este for o primeiro commit do repositório, adicionar a
+estrutura base do projeto.
 
 **Arquivos**:
+
 ```
 CMakeLists.txt
 extension_config.cmake
@@ -154,6 +172,7 @@ test/
 ```
 
 **Comando**:
+
 ```bash
 # Adicionar tudo exceto build artifacts
 git add CMakeLists.txt extension_config.cmake vcpkg.json
@@ -175,11 +194,12 @@ This is a DuckDB extension that registers cloud storage protocols
 filesystems with support for Parquet, CSV, Delta Lake, and Iceberg."
 ```
 
----
+______________________________________________________________________
 
 ## 🔄 Ordem de Execução
 
 ### Se o repositório já tem commits anteriores:
+
 ```bash
 # 1. Aplicar fix do código
 git add src/include/core/cloud_table_functions.hpp src/core/cloud_table_functions.cpp
@@ -258,6 +278,7 @@ EOF
 ```
 
 ### Se este é o primeiro commit (repositório vazio):
+
 ```bash
 # 1. Commit inicial com estrutura base
 git add CMakeLists.txt extension_config.cmake vcpkg.json \
@@ -280,11 +301,12 @@ filesystems with support for Parquet, CSV, Delta Lake, and Iceberg."
 # 2-4. Seguir os commits 1-3 acima
 ```
 
----
+______________________________________________________________________
 
 ## 🚫 O Que NÃO Commitar
 
 **Build artifacts** (adicionar ao `.gitignore`):
+
 ```gitignore
 # Build outputs
 build/
@@ -304,6 +326,7 @@ test_extension.sh
 ```
 
 **Comando**:
+
 ```bash
 # Criar .gitignore
 cat > .gitignore << 'EOF'
@@ -328,7 +351,7 @@ git add .gitignore
 git commit -m "chore: add .gitignore for build artifacts and IDE files"
 ```
 
----
+______________________________________________________________________
 
 ## 📊 Verificação
 
@@ -339,6 +362,7 @@ git log --oneline --graph
 ```
 
 **Output esperado**:
+
 ```
 * a1b2c3d chore: add build and dependency check scripts
 * d4e5f6g docs: add comprehensive build and test documentation
@@ -347,18 +371,18 @@ git log --oneline --graph
 * n3o4p5q chore: initial CloudFS DuckDB extension structure
 ```
 
----
+______________________________________________________________________
 
 ## 🎯 Benefícios Desta Estrutura
 
 1. **Commits atômicos**: Cada commit tem um propósito único e claro
-2. **Reversível**: Pode reverter documentação sem afetar código
-3. **Bisect-friendly**: Fácil encontrar qual commit introduziu um bug
-4. **Code review**: Reviewer pode analisar cada mudança separadamente
-5. **Conventional commits**: Mensagens seguem padrão `type(scope): description`
-6. **Contexto completo**: Commit messages explicam o "porquê", não só o "o quê"
+1. **Reversível**: Pode reverter documentação sem afetar código
+1. **Bisect-friendly**: Fácil encontrar qual commit introduziu um bug
+1. **Code review**: Reviewer pode analisar cada mudança separadamente
+1. **Conventional commits**: Mensagens seguem padrão `type(scope): description`
+1. **Contexto completo**: Commit messages explicam o "porquê", não só o "o quê"
 
----
+______________________________________________________________________
 
 ## ✅ Checklist
 
@@ -371,8 +395,9 @@ Antes de fazer push:
 - [ ] Histórico está limpo e compreensível (`git log --oneline`)
 - [ ] Cada commit tem um propósito único e claro
 
----
+______________________________________________________________________
 
-**Autor**: GitHub Copilot  
-**Data**: 2026-06-03  
-**Contexto**: Task 1 - Table Functions Fix (AGENT_HANDOVER.md)
+**Autor**: GitHub Copilot\
+**Data**: 2026-06-03\
+**Contexto**: Task 1 - Table
+Functions Fix (AGENT_HANDOVER.md)

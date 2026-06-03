@@ -1,8 +1,10 @@
 #pragma once
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/main/extension/extension_loader.hpp"
+
 #include "cloud_filesystem.hpp"
+
 #include <functional>
 
 namespace duckdb {
@@ -25,9 +27,7 @@ namespace duckdb {
 //     });
 // ─────────────────────────────────────────────────────────────────────────────
 
-using SecretBuilderFn = std::function<void(ClientContext &,
-                                            CreateSecretInput &,
-                                            CloudFileSystem &)>;
+using SecretBuilderFn = std::function<void(ClientContext&, CreateSecretInput&, CloudFileSystem&)>;
 
 struct CloudSecretRegistry {
     // Clear all registered slots. Must be called at the start of LoadInternal
@@ -36,12 +36,10 @@ struct CloudSecretRegistry {
 
     // Register a (secret_type, provider) pair backed by a builder callback.
     // named_param_names: list of accepted named parameters (e.g. {"token","scope"})
-    static void Register(ExtensionLoader        &loader,
-                          CloudFileSystem        &cfs,
-                          const std::string      &secret_type,   // e.g. "gdfs"
-                          const std::string      &provider,      // e.g. "oauth"
-                          std::vector<std::string> named_params,
-                          SecretBuilderFn         builder);
+    static void Register(ExtensionLoader& loader, CloudFileSystem& cfs,
+                         const std::string& secret_type, // e.g. "gdfs"
+                         const std::string& provider,    // e.g. "oauth"
+                         std::vector<std::string> named_params, SecretBuilderFn builder);
 };
 
 } // namespace duckdb

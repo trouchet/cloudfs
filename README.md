@@ -4,13 +4,17 @@
 [![C++17](https://img.shields.io/badge/C++-17-00599C.svg)](https://isocpp.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> A DuckDB extension that registers cloud storage protocols as first-class filesystems with native support for Parquet, CSV, Delta Lake, and Iceberg.
+> A DuckDB extension that registers cloud storage protocols as first-class
+> filesystems with native support for Parquet, CSV, Delta Lake, and Iceberg.
 
 ## 🚀 Features
 
-- **Multi-Provider Support**: OneDrive, SharePoint, Google Drive, Dropbox, SFTP, and local VFS
-- **Protocol Integration**: Use cloud URLs directly in DuckDB queries (`spfs://`, `odfs://`, `gdfs://`, `dbxfs://`, `sftp://`, `vfs://`)
-- **Table Functions**: Built-in `ls()`, `stat()`, `du()` for filesystem exploration
+- **Multi-Provider Support**: OneDrive, SharePoint, Google Drive, Dropbox, SFTP,
+  and local VFS
+- **Protocol Integration**: Use cloud URLs directly in DuckDB queries
+  (`spfs://`, `odfs://`, `gdfs://`, `dbxfs://`, `sftp://`, `vfs://`)
+- **Table Functions**: Built-in `ls()`, `stat()`, `du()` for filesystem
+  exploration
 - **Smart Caching**: 3-tier LRU cache with TTL for optimal performance
 - **Secure Auth**: OAuth2 flows with token persistence via DuckDB secrets
 - **Format Support**: Parquet, CSV, JSON, Delta Lake, Iceberg
@@ -79,21 +83,23 @@ SELECT * FROM du('odfs://Projects/');
 
 ### Supported Protocols
 
-| Protocol | Provider | Example URL |
-|----------|----------|-------------|
-| `odfs://` | OneDrive | `odfs://Documents/file.parquet` |
-| `spfs://` | SharePoint | `spfs://sites/team/Shared Documents/data.csv` |
-| `gdfs://` | Google Drive | `gdfs://My Drive/dataset.parquet` |
-| `dbxfs://` | Dropbox | `dbxfs:///work/analysis.csv` |
-| `sftp://` | SFTP | `sftp://user@server/path/to/file.parquet` |
-| `vfs://` | VFS Agent | `vfs://localhost:19876/data/file.csv` |
+| Protocol   | Provider     | Example URL                                   |
+| ---------- | ------------ | --------------------------------------------- |
+| `odfs://`  | OneDrive     | `odfs://Documents/file.parquet`               |
+| `spfs://`  | SharePoint   | `spfs://sites/team/Shared Documents/data.csv` |
+| `gdfs://`  | Google Drive | `gdfs://My Drive/dataset.parquet`             |
+| `dbxfs://` | Dropbox      | `dbxfs:///work/analysis.csv`                  |
+| `sftp://`  | SFTP         | `sftp://user@server/path/to/file.parquet`     |
+| `vfs://`   | VFS Agent    | `vfs://localhost:19876/data/file.csv`         |
 
 ## 📖 Documentation
 
-- **[Development Guide](docs/DEVELOPMENT.md)** - Contributing and development workflow
+- **[Development Guide](docs/DEVELOPMENT.md)** - Contributing and development
+  workflow
 - **[Build Quickstart](docs/BUILD_QUICKSTART.md)** - Detailed build instructions
 - **[Commit Guidelines](docs/COMMIT_PLAN.md)** - Git commit conventions
-- **[Adding a Provider](docs/adding_a_provider.md)** - How to add new cloud providers
+- **[Adding a Provider](docs/adding_a_provider.md)** - How to add new cloud
+  providers
 - **[Task Status](docs/TASK1_STATUS.md)** - Current development status
 
 ## 🛠️ Development
@@ -129,7 +135,8 @@ git commit -m "fix(table-functions): handle null pointers"
 git commit -m "docs(readme): update installation steps"
 ```
 
-Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
+Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
+`build`, `ci`, `chore`, `revert`
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for complete guidelines.
 
@@ -194,14 +201,15 @@ EOF
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/amazing-feature`
-3. Make your changes following our [commit guidelines](docs/COMMIT_PLAN.md)
-4. Ensure all checks pass: `make check-all`
-5. Commit: `git commit -m "feat(provider): add amazing feature"`
-6. Push: `git push origin feat/amazing-feature`
-7. Open a Pull Request
+1. Create a feature branch: `git checkout -b feat/amazing-feature`
+1. Make your changes following our [commit guidelines](docs/COMMIT_PLAN.md)
+1. Ensure all checks pass: `make check-all`
+1. Commit: `git commit -m "feat(provider): add amazing feature"`
+1. Push: `git push origin feat/amazing-feature`
+1. Open a Pull Request
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed contributing guidelines.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed contributing
+guidelines.
 
 ## 📋 Requirements
 
@@ -229,8 +237,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/yourusername/cloudfs/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/cloudfs/discussions)
+- **Discussions**:
+  [GitHub Discussions](https://github.com/yourusername/cloudfs/discussions)
 
----
+______________________________________________________________________
 
 **Made with ❤️ for the DuckDB community**

@@ -1,6 +1,7 @@
 #pragma once
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+
 #include "cloud_filesystem.hpp"
 
 namespace duckdb {
@@ -27,7 +28,7 @@ namespace duckdb {
 //   SELECT sum(size) FROM ls('dbxfs:///reports/', recursive := true)
 //            WHERE type = 'file' AND name LIKE '%.parquet';
 // ─────────────────────────────────────────────────────────────────────────────
-TableFunction LsTableFunction(CloudFileSystem *cfs);
+TableFunction LsTableFunction(CloudFileSystem* cfs);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // stat(url)
@@ -38,7 +39,7 @@ TableFunction LsTableFunction(CloudFileSystem *cfs);
 // Usage:
 //   SELECT size_pretty, modified FROM stat('spfs://tenant.sharepoint.com/.../file.parquet');
 // ─────────────────────────────────────────────────────────────────────────────
-TableFunction StatTableFunction(CloudFileSystem *cfs);
+TableFunction StatTableFunction(CloudFileSystem* cfs);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // du(url)
@@ -52,16 +53,16 @@ TableFunction StatTableFunction(CloudFileSystem *cfs);
 //   SELECT * FROM du('spfs://contoso.sharepoint.com/sites/X/Docs/')
 //   ORDER BY total_size DESC LIMIT 10;
 // ─────────────────────────────────────────────────────────────────────────────
-TableFunction DuTableFunction(CloudFileSystem *cfs);
+TableFunction DuTableFunction(CloudFileSystem* cfs);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: set global CFS pointer (called once at extension load)
 // ─────────────────────────────────────────────────────────────────────────────
-void SetCloudFS(CloudFileSystem *cfs);
+void SetCloudFS(CloudFileSystem* cfs);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: register all three with the loader
 // ─────────────────────────────────────────────────────────────────────────────
-void RegisterCloudTableFunctions(ExtensionLoader &loader);
+void RegisterCloudTableFunctions(ExtensionLoader& loader);
 
 } // namespace duckdb

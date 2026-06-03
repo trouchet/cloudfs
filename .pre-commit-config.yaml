@@ -12,38 +12,39 @@ repos:
       # Prevent large files from being committed
       - id: check-added-large-files
         args: ['--maxkb=1024']
-      
+
       # Ensure files end with newline
       - id: end-of-file-fixer
         exclude: '\.(duckdb|duckdb_extension)$'
-      
+
       # Trim trailing whitespace
       - id: trailing-whitespace
         exclude: '\.(md|markdown)$'
-      
+
       # Check for merge conflict markers
       - id: check-merge-conflict
-      
+
       # Check YAML syntax
       - id: check-yaml
-      
+
       # Check JSON syntax
       - id: check-json
-      
-      # Prevent committing to main/master
-      - id: no-commit-to-branch
-        args: ['--branch', 'master', '--branch', 'main']
-      
+
+      # Note: no-commit-to-branch is disabled for direct main development
+      # Uncomment and add args if you want to enforce feature branches
+      # - id: no-commit-to-branch
+      #   args: ['--branch', 'master', '--branch', 'main']
+
       # Check for files that would conflict on case-insensitive filesystems
       - id: check-case-conflict
-      
+
       # Fix mixed line endings
       - id: mixed-line-ending
         args: ['--fix=lf']
-      
+
       # Check executables have shebangs
       - id: check-executables-have-shebangs
-      
+
       # Check shebangs point to real executables
       - id: check-shebang-scripts-are-executable
 
