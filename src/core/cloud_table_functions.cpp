@@ -99,7 +99,7 @@ struct LsBindData : public FunctionData {
 struct LsScanState : public GlobalTableFunctionState {
     // Stack of (folder_id, url_prefix) pairs to visit
     std::vector<std::pair<std::string, std::string>> folder_stack;
-    std::string current_cursor; // pagination cursor for current folder
+    std::string current_cursor;                            // pagination cursor for current folder
     std::vector<std::pair<std::string, CloudItem>> buffer; // pending items to emit
     idx_t buffer_offset = 0;
     bool finished = false;
@@ -125,9 +125,9 @@ static void FetchNextBatch(LsBindData& bind, LsScanState& state) {
     std::string err;
     std::vector<CloudItem> batch;
 
-    if (!bind.backend->ListFolder(bind.root_id, folder_id, bind.token,
-                                   [&](const CloudItem& c) { batch.push_back(c); },
-                                   state.current_cursor, err)) {
+    if (!bind.backend->ListFolder(
+            bind.root_id, folder_id, bind.token, [&](const CloudItem& c) { batch.push_back(c); },
+            state.current_cursor, err)) {
         // Error during listing - mark as finished to avoid infinite loop
         state.finished = true;
         return;
@@ -139,11 +139,11 @@ static void FetchNextBatch(LsBindData& bind, LsScanState& state) {
         std::string item_url = url_prefix + "/" + item.name;
         bool name_matches = (bind.pattern.empty() || bind.pattern == "*" ||
                              fnmatch(bind.pattern.c_str(), item.name.c_str(), 0) == 0);
-        
+
         if (name_matches || item.is_folder) {
             state.buffer.emplace_back(item_url, item);
         }
-        
+
         if (item.is_folder && bind.recursive) {
             new_folders.emplace_back(item.id, item_url);
         }
@@ -184,7 +184,8 @@ static unique_ptr<FunctionData> LsBind(ClientContext& ctx, TableFunctionBindInpu
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
     if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.", url);
+        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
+                                    url);
     if (tok.empty())
         cfs->GetTokenPublic(b->Scheme(), tok, err);
 
@@ -202,8 +203,7 @@ static unique_ptr<FunctionData> LsBind(ClientContext& ctx, TableFunctionBindInpu
                                  is_single_file);
 }
 
-static unique_ptr<GlobalTableFunctionState> LsInit(ClientContext&,
-                                                     TableFunctionInitInput& input) {
+static unique_ptr<GlobalTableFunctionState> LsInit(ClientContext&, TableFunctionInitInput& input) {
     auto& bind = input.bind_data->Cast<LsBindData>();
     auto state = make_uniq<LsScanState>();
 
@@ -242,7 +242,8 @@ static void LsScan(ClientContext&, TableFunctionInput& data_p, DataChunk& output
         }
 
         if (item.modified_time_ms > 0) {
-            output.data[5].SetValue(count, Value::TIMESTAMP(Timestamp::FromEpochMs(item.modified_time_ms)));
+            output.data[5].SetValue(
+                count, Value::TIMESTAMP(Timestamp::FromEpochMs(item.modified_time_ms)));
         } else {
             output.data[5].SetValue(count, Value());
         }
@@ -318,7 +319,8 @@ static unique_ptr<FunctionData> StatBind(ClientContext&, TableFunctionBindInput&
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
     if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.", url);
+        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
+                                    url);
     if (tok.empty())
         cfs->GetTokenPublic(b->Scheme(), tok, err);
 
@@ -404,10 +406,10 @@ struct DuScanState : public GlobalTableFunctionState {
     struct FolderFrame {
         std::string folder_id;
         std::string folder_url;
-        DuRow accumulated; // counts for this folder
+        DuRow accumulated;                                        // counts for this folder
         std::vector<std::pair<std::string, std::string>> subdirs; // (id, url) pairs
         idx_t subdir_index = 0;
-        std::string cursor; // pagination cursor
+        std::string cursor;  // pagination cursor
         bool listed = false; // true when ListFolder completed
     };
 
@@ -431,9 +433,9 @@ static void ProcessDuFolder(DuBindData& bind, DuScanState& state) {
         std::string err;
         std::vector<CloudItem> batch;
 
-        if (!bind.backend->ListFolder(bind.root_id, frame.folder_id, bind.token,
-                                       [&](const CloudItem& c) { batch.push_back(c); },
-                                       frame.cursor, err)) {
+        if (!bind.backend->ListFolder(
+                bind.root_id, frame.folder_id, bind.token,
+                [&](const CloudItem& c) { batch.push_back(c); }, frame.cursor, err)) {
             // Error - mark as listed to skip
             frame.listed = true;
             frame.cursor.clear();
@@ -501,7 +503,8 @@ static unique_ptr<FunctionData> DuBind(ClientContext&, TableFunctionBindInput& i
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
     if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.", url);
+        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
+                                    url);
     if (tok.empty())
         cfs->GetTokenPublic(b->Scheme(), tok, err);
 
@@ -516,8 +519,7 @@ static unique_ptr<FunctionData> DuBind(ClientContext&, TableFunctionBindInput& i
     return make_uniq<DuBindData>(b, root_id, tok, url_clean, folder);
 }
 
-static unique_ptr<GlobalTableFunctionState> DuInit(ClientContext&,
-                                                     TableFunctionInitInput& input) {
+static unique_ptr<GlobalTableFunctionState> DuInit(ClientContext&, TableFunctionInitInput& input) {
     auto& bind = input.bind_data->Cast<DuBindData>();
     auto state = make_uniq<DuScanState>();
 
