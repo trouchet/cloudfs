@@ -1,0 +1,146 @@
+---
+# CloudFS Pre-commit Configuration
+# See https://pre-commit.com for more information
+
+repos:
+  # ============================================================================
+  # General Hooks
+  # ============================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Prevent large files from being committed
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+      
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+        exclude: '\.(duckdb|duckdb_extension)$'
+      
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+        exclude: '\.(md|markdown)$'
+      
+      # Check for merge conflict markers
+      - id: check-merge-conflict
+      
+      # Check YAML syntax
+      - id: check-yaml
+      
+      # Check JSON syntax
+      - id: check-json
+      
+      # Prevent committing to main/master
+      - id: no-commit-to-branch
+        args: ['--branch', 'master', '--branch', 'main']
+      
+      # Check for files that would conflict on case-insensitive filesystems
+      - id: check-case-conflict
+      
+      # Fix mixed line endings
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      
+      # Check executables have shebangs
+      - id: check-executables-have-shebangs
+      
+      # Check shebangs point to real executables
+      - id: check-shebang-scripts-are-executable
+
+  # ============================================================================
+  # C++ Formatting (clang-format)
+  # ============================================================================
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.3
+    hooks:
+      - id: clang-format
+        files: '\.(cpp|hpp|c|h|cc|hh|cxx)$'
+        args: ['-i']
+
+  # ============================================================================
+  # CMake Formatting
+  # ============================================================================
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+        args: [--in-place]
+      - id: cmake-lint
+        args: [--disabled-codes=C0103]
+
+  # ============================================================================
+  # Shell Script Checks
+  # ============================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['--severity=warning']
+
+  # ============================================================================
+  # Markdown Formatting
+  # ============================================================================
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.17
+    hooks:
+      - id: mdformat
+        args: ['--wrap', '80']
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-tables
+
+  # ============================================================================
+  # Commit Message Validation (commitlint)
+  # ============================================================================
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.11.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+        additional_dependencies: ['@commitlint/config-conventional']
+
+  # ============================================================================
+  # Secrets Detection
+  # ============================================================================
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
+
+  # ============================================================================
+  # Go Formatting (for agent/)
+  # ============================================================================
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+        files: 'agent/.*\.go$'
+      - id: go-vet
+        files: 'agent/.*\.go$'
+      - id: go-mod-tidy
+        files: 'agent/go\.(mod|sum)$'
+
+# ============================================================================
+# Global Configuration
+# ============================================================================
+default_language_version:
+  python: python3
+
+# Files to exclude from all hooks
+exclude: |
+  (?x)^(
+    .*\.Zone\.Identifier|
+    build/.*|
+    vcpkg_installed/.*|
+    .*\.duckdb_extension|
+    .*\.duckdb|
+    .*\.log
+  )$
+
+# Fail fast: stop on first failure
+fail_fast: false
+
+# Minimum pre-commit version
+minimum_pre_commit_version: '2.20.0'

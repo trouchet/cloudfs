@@ -1,69 +1,57 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Build directories
+# Build outputs
 build/
-Build/
-build-*/
+*.duckdb_extension
+cloudfs-agent
+!scripts/
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
+# Test artifacts
+test_extension.sh
+*.test.log
+
+# DuckDB databases
+*.duckdb
+*.duckdb.wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+*.Zone.Identifier
+Thumbs.db
+
+# Logs
+*.log
 
 # Temporary files
+/tmp/
 *.tmp
-*.log
 *.bak
-*.swp
 
 # vcpkg
 vcpkg_installed/
 
-# debug information files
-*.dwo
+# Node.js / npm
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# test output & cache
-Testing/
-.cache/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Pre-commit
+.pre-commit-config.yaml.bak
+
+# Secrets
+.secrets.baseline

@@ -1,0 +1,36 @@
+{
+  "name": "cloudfs",
+  "version": "0.1.0",
+  "description": "DuckDB extension for cloud storage access",
+  "private": true,
+  "scripts": {
+    "lint": "pre-commit run --all-files",
+    "lint:commit": "commitlint --from=HEAD~1",
+    "format:cpp": "find src -name '*.cpp' -o -name '*.hpp' | xargs clang-format -i",
+    "format:cmake": "cmake-format -i CMakeLists.txt",
+    "check:shell": "shellcheck scripts/*.sh",
+    "prepare": "pre-commit install --hook-type pre-commit && pre-commit install --hook-type commit-msg"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/cloudfs.git"
+  },
+  "keywords": [
+    "duckdb",
+    "cloud",
+    "storage",
+    "filesystem",
+    "extension"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@commitlint/cli": "^18.6.0",
+    "@commitlint/config-conventional": "^18.6.0"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  }
+}
