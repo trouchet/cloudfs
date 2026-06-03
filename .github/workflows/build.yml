@@ -1,0 +1,104 @@
+name: Build Extension
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    env:
+      GEN: ninja
+      BUILD_BENCHMARK: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_HTTPFS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      CRASH_ON_ASSERT: 1
+
+    steps:
+      - name: Install dependencies
+        shell: bash
+        run: |
+          apt-get update -y
+          apt-get install -y git cmake ninja-build build-essential libssl-dev libcurl4-openssl-dev libssh2-1-dev
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      - name: Build extension
+        shell: bash
+        run: |
+          make release
+
+      - name: Test extension
+        shell: bash
+        run: |
+          make test
+
+  macos:
+    name: MacOS
+    runs-on: macos-latest
+    env:
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          brew install ninja openssl@3 curl libssh2
+
+      - name: Build extension
+        shell: bash
+        run: |
+          make release
+
+      - name: Test extension
+        shell: bash
+        run: |
+          make test
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    env:
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      - name: Setup Vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '501db0f17ef6df184fcdbfbe0f87cde2313b6ab1'
+
+      - name: Build extension
+        shell: bash
+        run: |
+          make release
+
+      - name: Test extension  
+        shell: bash
+        run: |
+          make test
