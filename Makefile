@@ -1,4 +1,16 @@
-.PHONY: help setup build test clean format lint validate install-hooks
+.PHONY: help setup build test clean format lint validate install-hooks release debug
+
+# Build configuration
+GEN ?= ninja
+BUILD_TYPE ?= Release
+CMAKE_FLAGS ?=
+
+# Translate GEN to CMake generator name
+ifeq ($(GEN),ninja)
+CMAKE_GENERATOR := Ninja
+else
+CMAKE_GENERATOR := $(GEN)
+endif
 
 # Colors
 BOLD := \033[1m
@@ -27,14 +39,37 @@ install-hooks: ## Install Git pre-commit hooks
 	@pre-commit install --hook-type commit-msg
 	@echo "$(GREEN)✓ Hooks installed$(NC)"
 
+release: ## Build extension in release mode
+	@echo "$(BOLD)Building CloudFS extension (Release)...$(NC)"
+	@mkdir -p build/release
+	@cd build/release && cmake -G "$(CMAKE_GENERATOR)" -DCMAKE_BUILD_TYPE=Release $(CMAKE_FLAGS) ../..
+	@cmake --build build/release --config Release
+	@echo "$(GREEN)✓ Release build complete$(NC)"
+
+debug: ## Build extension in debug mode
+	@echo "$(BOLD)Building CloudFS extension (Debug)...$(NC)"
+	@mkdir -p build/debug
+	@cd build/debug && cmake -G "$(CMAKE_GENERATOR)" -DCMAKE_BUILD_TYPE=Debug $(CMAKE_FLAGS) ../..
+	@cmake --build build/debug --config Debug
+	@echo "$(GREEN)✓ Debug build complete$(NC)"
+
 build: ## Build the extension
 	@echo "$(BOLD)Building CloudFS extension...$(NC)"
 	@chmod +x scripts/build_and_test.sh
 	@scripts/build_and_test.sh
 
-test: build ## Run tests
+test: ## Run tests
 	@echo "$(BOLD)Running tests...$(NC)"
-	@cd build && ctest --output-on-failure
+	@if [ -d build/release ]; then \
+		cd build/release && ctest --output-on-failure; \
+	elif [ -d build/debug ]; then \
+		cd build/debug && ctest --output-on-failure; \
+	elif [ -d build ]; then \
+		cd build && ctest --output-on-failure; \
+	else \
+		echo "$(YELLOW)No build directory found. Run 'make release' or 'make debug' first.$(NC)"; \
+		exit 1; \
+	fi
 
 clean: ## Clean build artifacts
 	@echo "$(BOLD)Cleaning build artifacts...$(NC)"

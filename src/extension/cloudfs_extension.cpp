@@ -252,8 +252,7 @@ static void LoadInternal(ExtensionLoader& loader) {
     }
 
     // Table functions: ls(), stat(), du()
-    SetCloudFS(g_cfs);
-    RegisterCloudTableFunctions(loader);
+    RegisterCloudTableFunctions(loader, g_cfs);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
