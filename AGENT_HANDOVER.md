@@ -435,7 +435,7 @@ extension:
   requires_toolchains: cmake;curl;openssl;libssh2
 
 repo:
-  github: your-org/duckdb-cloudfs
+  github: trouchet/cloudfs
   ref: <commit-SHA-exato-aqui>   # nunca use branch name — sempre SHA
 
 docs:
