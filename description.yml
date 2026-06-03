@@ -9,10 +9,14 @@ extension:
   version: 0.1.0
   language: C++
   build: cmake
-  licence: MIT
+  license: MIT
   maintainers:
     - trouchet
-  requires_toolchains: cmake;curl;openssl;libssh2
+  requires_toolchains:
+    - cmake
+    - curl
+    - openssl
+    - libssh2
 
 repo:
   github: trouchet/cloudfs
@@ -51,6 +55,6 @@ docs:
     All formats that work with s3:// work here too: Parquet, CSV, JSON,
     Delta Lake, Apache Iceberg, Hive partitioning, COPY TO, glob patterns.
 
-    cloudfs-agent is a ~8 MB static Go binary that turns any Linux server
+    cloudfs-agent is an ~8 MB static Go binary that turns any Linux server
     into a vfs:// endpoint with HTTP range reads and bearer-token auth.
     Deploy with: ./cloudfs-agent --token $(openssl rand -hex 32) --root /data
