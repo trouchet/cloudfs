@@ -1,0 +1,73 @@
+# name: test/sql/all_providers.test
+# group: [cloudfs]
+
+require cloudfs
+
+# Extension loads
+query I
+SELECT cloudfs_version() LIKE '%cloudfs%';
+----
+true
+
+# All 4 schemes are registered
+query I
+SELECT cloudfs_providers() LIKE '%spfs%'
+   AND cloudfs_providers() LIKE '%odfs%'
+   AND cloudfs_providers() LIKE '%gdfs%'
+   AND cloudfs_providers() LIKE '%dbxfs%';
+----
+true
+
+# SharePoint token secret
+statement ok
+CREATE OR REPLACE SECRET sp (TYPE sharepoint, PROVIDER token, TOKEN 'tok');
+
+# OneDrive token secret
+statement ok
+CREATE OR REPLACE SECRET od (TYPE onedrive, PROVIDER token, TOKEN 'tok');
+
+# Google Drive token secret
+statement ok
+CREATE OR REPLACE SECRET gd (TYPE gdrive, PROVIDER token, TOKEN 'tok');
+
+# Dropbox token secret
+statement ok
+CREATE OR REPLACE SECRET dbx (TYPE dropbox, PROVIDER token, TOKEN 'tok');
+
+# All secrets visible
+query I
+SELECT count(*) FROM duckdb_secrets() WHERE type IN ('sharepoint','onedrive','gdrive','dropbox');
+----
+4
+
+# Cache clear — single scheme
+query I
+SELECT cloudfs_clear_cache('spfs');
+----
+OK: cache cleared for 'spfs'
+
+# Cache clear — all
+query I
+SELECT cloudfs_clear_cache();
+----
+OK: all caches cleared
+
+# No crash on spfs:// without real credentials
+statement error
+SELECT * FROM read_parquet('spfs://x.sharepoint.com/sites/A/Docs/f.parquet') LIMIT 1;
+
+# No crash on odfs://
+statement error
+SELECT * FROM read_parquet('odfs://me/Documents/f.parquet') LIMIT 1;
+
+# No crash on gdfs://
+statement error
+SELECT * FROM read_parquet('gdfs://MyDrive/data/f.parquet') LIMIT 1;
+
+# No crash on dbxfs://
+statement error
+SELECT * FROM read_parquet('dbxfs://data/f.parquet') LIMIT 1;
+
+# Cleanup
+statement ok
+DROP SECRET sp; DROP SECRET od; DROP SECRET gd; DROP SECRET dbx;
