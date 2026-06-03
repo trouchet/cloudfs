@@ -1,0 +1,35 @@
+# /etc/systemd/system/cloudfs-agent.service
+# Install: cp cloudfs-agent.service /etc/systemd/system/
+#          systemctl daemon-reload && systemctl enable --now cloudfs-agent
+
+[Unit]
+Description=cloudfs-agent — DuckDB VFS filesystem bridge
+After=network.target
+
+[Service]
+Type=simple
+User=cloudfs
+Group=cloudfs
+
+# Token stored in /etc/cloudfs/token (chmod 600, owned by cloudfs user)
+EnvironmentFile=/etc/cloudfs/env
+
+ExecStart=/usr/local/bin/cloudfs-agent \
+    --token ${CLOUDFS_TOKEN} \
+    --port ${CLOUDFS_PORT:-8765} \
+    --root ${CLOUDFS_ROOT:-/data} \
+    --tls \
+    --cert /etc/cloudfs/cert.pem \
+    --key  /etc/cloudfs/key.pem
+
+Restart=always
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=${CLOUDFS_ROOT:-/data}
+
+[Install]
+WantedBy=multi-user.target
