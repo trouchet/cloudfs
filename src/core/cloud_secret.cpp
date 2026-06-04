@@ -19,6 +19,11 @@ namespace duckdb {
 // Thread safety: registrations happen at extension load time (single-threaded),
 // invocations happen at CREATE SECRET time (may be concurrent).
 // Reads are safe after initial setup because the vector is never grown after Load().
+//
+// Lifecycle: CloudSecretRegistry::Clear() is called at the start of each
+// LoadInternal() to remove stale CloudFileSystem* pointers from prior loads.
+// This prevents use-after-free when the extension is reloaded or loaded into
+// multiple DuckDB database instances within the same process.
 
 struct SecretDispatchEntry {
     CloudFileSystem* cfs;
