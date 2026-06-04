@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <thread>
@@ -58,8 +59,16 @@ CURL* CloudHttpClient::MakeCurl(HttpResponse& resp) {
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &resp);
     curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, HeaderCb);
     curl_easy_setopt(c, CURLOPT_HEADERDATA, &resp);
-    curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
+    
+    // Security: verify both peer certificate AND hostname
     curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);  // Verify hostname matches cert
+    
+    // Timeout strategy: separate connection and total timeouts
+    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT_MS, 30000L);  // 30s connection timeout
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);              // 120s total timeout
+    curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);               // Thread-safe, no signals
+    
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(c, CURLOPT_TCP_KEEPALIVE, 1L);
@@ -85,6 +94,10 @@ bool CloudHttpClient::ShouldRetry(long status, const CloudRetryPolicy& p) {
 void CloudHttpClient::WaitForRetry(int attempt, const CloudRetryPolicy& p) {
     int ms = (int)(p.initial_wait_ms * std::pow(p.backoff_factor, attempt));
     ms = std::min(ms, p.max_wait_ms);
+    // Add jitter: randomize ±20% to avoid thundering herd
+    int jitter = (ms * 20) / 100;
+    int jitter_offset = (rand() % (jitter * 2 + 1)) - jitter;
+    ms = std::max(0, ms + jitter_offset);
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
@@ -145,8 +158,16 @@ int64_t CloudHttpClient::ReadRange(const std::string& url, const std::string& ac
         HttpResponse resp_hdr; // for headers only
         CURL* c = curl_easy_init();
         curl_easy_setopt(c, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
+        
+        // Security: verify both peer certificate AND hostname
         curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+        
+        // Timeout strategy: separate connection and total timeouts
+        curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT_MS, 30000L);
+        curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
+        curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
+        
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
         curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteBufCb);
