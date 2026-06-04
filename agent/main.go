@@ -27,6 +27,7 @@ import (
     "path/filepath"
     "strconv"
     "strings"
+    "sync"
     "time"
 )
 
@@ -64,9 +65,11 @@ type UploadSession struct {
     Path      string
     CreatedAt time.Time
     File      *os.File
+    BytesWritten int64
 }
 
 var uploadSessions = map[string]*UploadSession{}
+var uploadMu sync.RWMutex  // Protects uploadSessions map
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -217,6 +220,14 @@ func handleUploadStart(w http.ResponseWriter, r *http.Request) {
         Size int64  `json:"size"`
     }
     json.NewDecoder(r.Body).Decode(&req)
+    
+    // Enforce upload size limit
+    maxBytes := *flagMaxSize * 1024 * 1024
+    if req.Size > maxBytes {
+        http.Error(w, fmt.Sprintf("upload too large: %d MB (max %d MB)", req.Size/(1024*1024), *flagMaxSize), 413)
+        return
+    }
+    
     p, err := safePath(req.Path)
     if err != nil { http.Error(w, err.Error(), 400); return }
 
@@ -225,7 +236,10 @@ func handleUploadStart(w http.ResponseWriter, r *http.Request) {
     if err != nil { http.Error(w, err.Error(), 500); return }
 
     id := fmt.Sprintf("%d", time.Now().UnixNano())
-    uploadSessions[id] = &UploadSession{ID: id, Path: p, CreatedAt: time.Now(), File: f}
+    
+    uploadMu.Lock()
+    uploadSessions[id] = &UploadSession{ID: id, Path: p, CreatedAt: time.Now(), File: f, BytesWritten: 0}
+    uploadMu.Unlock()
 
     w.Header().Set("Content-Type", "application/json")
     fmt.Fprintf(w, `{"session_id":"%s"}`, id)
@@ -237,13 +251,32 @@ func handleUploadChunk(w http.ResponseWriter, r *http.Request) {
     id  := r.URL.Query().Get("session")
     off, _ := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
 
+    uploadMu.RLock()
     sess, ok := uploadSessions[id]
+    uploadMu.RUnlock()
+    
     if !ok { http.Error(w, "unknown session", 404); return }
 
     sess.File.Seek(off, io.SeekStart)
-    if _, err := io.Copy(sess.File, r.Body); err != nil {
+    n, err := io.Copy(sess.File, r.Body)
+    if err != nil {
         http.Error(w, err.Error(), 500); return
     }
+    
+    uploadMu.Lock()
+    sess.BytesWritten += n
+    maxBytes := *flagMaxSize * 1024 * 1024
+    if sess.BytesWritten > maxBytes {
+        // Exceeded limit during upload - cleanup
+        sess.File.Close()
+        os.Remove(sess.Path)
+        delete(uploadSessions, id)
+        uploadMu.Unlock()
+        http.Error(w, fmt.Sprintf("upload exceeded limit: %d MB", *flagMaxSize), 413)
+        return
+    }
+    uploadMu.Unlock()
+    
     w.WriteHeader(202)
 }
 
@@ -251,13 +284,29 @@ func handleUploadChunk(w http.ResponseWriter, r *http.Request) {
 func handleUploadFinish(w http.ResponseWriter, r *http.Request) {
     if *flagReadOnly { http.Error(w, "read-only mode", 403); return }
     id   := r.URL.Query().Get("session")
+    
+    uploadMu.Lock()
     sess, ok := uploadSessions[id]
-    if !ok { http.Error(w, "unknown session", 404); return }
+    if !ok {
+        uploadMu.Unlock()
+        http.Error(w, "unknown session", 404)
+        return
+    }
+    delete(uploadSessions, id)
+    uploadMu.Unlock()
 
     // Write any remaining bytes from the body
-    io.Copy(sess.File, r.Body)
+    n, _ := io.Copy(sess.File, r.Body)
+    sess.BytesWritten += n
     sess.File.Close()
-    delete(uploadSessions, id)
+    
+    // Final size check
+    maxBytes := *flagMaxSize * 1024 * 1024
+    if sess.BytesWritten > maxBytes {
+        os.Remove(sess.Path)
+        http.Error(w, fmt.Sprintf("upload exceeded limit: %d MB", *flagMaxSize), 413)
+        return
+    }
 
     info, _ := os.Stat(sess.Path)
     rel := strings.TrimPrefix(sess.Path, filepath.Clean(*flagRoot))
@@ -287,6 +336,9 @@ func main() {
         log.Fatalf("root directory does not exist: %s", *flagRoot)
     }
 
+    // Start background cleanup for stale upload sessions
+    go cleanupStaleSessions()
+
     mux := http.NewServeMux()
     mux.HandleFunc("/v1/ping",          authMiddleware(handlePing))
     mux.HandleFunc("/v1/stat",          authMiddleware(handleStat))
@@ -308,5 +360,24 @@ func main() {
         log.Fatal(http.ListenAndServeTLS(addr, *flagCert, *flagKey, mux))
     } else {
         log.Fatal(http.ListenAndServe(addr, mux))
+    }
+}
+
+// cleanupStaleSessions removes upload sessions older than 1 hour
+func cleanupStaleSessions() {
+    ticker := time.NewTicker(10 * time.Minute)
+    defer ticker.Stop()
+    for range ticker.C {
+        uploadMu.Lock()
+        now := time.Now()
+        for id, sess := range uploadSessions {
+            if now.Sub(sess.CreatedAt) > time.Hour {
+                sess.File.Close()
+                os.Remove(sess.Path)
+                delete(uploadSessions, id)
+                log.Printf("cleaned up stale upload session: %s", id)
+            }
+        }
+        uploadMu.Unlock()
     }
 }
