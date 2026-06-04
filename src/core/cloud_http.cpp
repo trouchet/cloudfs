@@ -265,6 +265,26 @@ HttpResponse CloudHttpClient::Patch(const std::string& url, const std::string& t
     return Execute(r);
 }
 
+// ─── URL encoding ─────────────────────────────────────────────────────────────
+std::string UrlUtil::Encode(const std::string& s) {
+    CURL* c = curl_easy_init();
+    char* enc = curl_easy_escape(c, s.c_str(), (int)s.size());
+    std::string result(enc);
+    curl_free(enc);
+    curl_easy_cleanup(c);
+    return result;
+}
+
+std::string UrlUtil::BuildQuery(const std::vector<std::pair<std::string, std::string>>& params) {
+    if (params.empty()) return "";
+    std::string q;
+    for (size_t i = 0; i < params.size(); ++i) {
+        if (i > 0) q += "&";
+        q += Encode(params[i].first) + "=" + Encode(params[i].second);
+    }
+    return q;
+}
+
 // ─── JsonUtil ─────────────────────────────────────────────────────────────────
 std::string JsonUtil::GetString(const std::string& json, const std::string& key) {
     auto search = "\"" + key + "\"";
@@ -373,9 +393,34 @@ std::string JsonUtil::MakeObject(const std::vector<std::pair<std::string, std::s
     for (size_t i = 0; i < kv.size(); ++i) {
         if (i)
             s += ",";
-        s += "\"" + kv[i].first + "\":\"" + kv[i].second + "\"";
+        s += "\"" + EscapeJsonString(kv[i].first) + "\":\"" + EscapeJsonString(kv[i].second) + "\"";
     }
     return s + "}";
+}
+
+std::string JsonUtil::EscapeJsonString(const std::string& s) {
+    std::string result;
+    result.reserve(s.size());
+    for (char c : s) {
+        switch (c) {
+        case '"':  result += "\\\""; break;
+        case '\\': result += "\\\\"; break;
+        case '\b': result += "\\b";  break;
+        case '\f': result += "\\f";  break;
+        case '\n': result += "\\n";  break;
+        case '\r': result += "\\r";  break;
+        case '\t': result += "\\t";  break;
+        default:
+            if ((unsigned char)c < 0x20) {
+                char buf[7];
+                snprintf(buf, sizeof(buf), "\\u%04x", (int)c);
+                result += buf;
+            } else {
+                result += c;
+            }
+        }
+    }
+    return result;
 }
 
 } // namespace duckdb
