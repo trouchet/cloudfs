@@ -88,10 +88,7 @@ bool VFSBackend::CreateUploadSession(const std::string& root, const std::string&
                                      const std::string& token, CloudUploadSession& out,
                                      std::string& err) {
     std::string path = parent_id + "/" + name;
-    std::string body = JsonUtil::MakeObject({
-        {"path", path},
-        {"size", std::to_string(total_size)}
-    });
+    std::string body = JsonUtil::MakeObject({{"path", path}, {"size", std::to_string(total_size)}});
     auto resp = http_.Post(root + "/v1/upload/start", token, body);
     if (!resp.ok()) {
         err = "upload start failed";
@@ -108,12 +105,11 @@ bool VFSBackend::UploadChunk(const CloudUploadSession& s, const char* data, int6
                              int64_t size, bool last, const std::string& token, std::string& err) {
     std::string endpoint;
     if (last) {
-        endpoint = s.upload_url + "/v1/upload/finish?" + UrlUtil::BuildQuery({{"session", s.item_id}});
+        endpoint =
+            s.upload_url + "/v1/upload/finish?" + UrlUtil::BuildQuery({{"session", s.item_id}});
     } else {
-        endpoint = s.upload_url + "/v1/upload/chunk?" + UrlUtil::BuildQuery({
-            {"session", s.item_id},
-            {"offset", std::to_string(off)}
-        });
+        endpoint = s.upload_url + "/v1/upload/chunk?" +
+                   UrlUtil::BuildQuery({{"session", s.item_id}, {"offset", std::to_string(off)}});
     }
     auto resp = http_.Put(endpoint, data, size, {{"Authorization", "Bearer " + token}});
     if (resp.status == 202 || resp.status == 201 || resp.status == 200)
