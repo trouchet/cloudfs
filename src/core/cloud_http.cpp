@@ -203,10 +203,27 @@ int64_t CloudHttpClient::ReadRange(const std::string& url, const std::string& ac
             WaitForRetry(attempt, policy);
             continue;
         }
-        if (status == 206)
-            return written; // ideal path
-        if (status == 200)
-            return std::min(written, length); // server ignored Range
+        
+        // Strict range read handling: we expect 206 Partial Content
+        if (status == 206) {
+            return written; // ideal path: server honored Range header
+        }
+        
+        // Server returned 200 OK - it ignored the Range header
+        // This is a data correctness issue: we asked for a specific slice
+        // but got a full response starting at offset 0.
+        // Only safe if we can verify Content-Range or offset is 0.
+        if (status == 200) {
+            // Check if we requested from offset 0
+            if (offset == 0 && written <= length) {
+                // Safe: full file starting at 0 is same as range from 0
+                return written;
+            }
+            // Otherwise, this is a correctness bug - don't silently return wrong data
+            err = "Server ignored Range header (returned 200 instead of 206) - data correctness issue";
+            return -1;
+        }
+        
         err = "ReadRange HTTP " + std::to_string(status);
         return -1;
     }
