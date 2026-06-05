@@ -61,6 +61,8 @@ cp build/cloudfs.duckdb_extension ~/.duckdb/extensions/v1.4.0/linux_amd64/
 LOAD cloudfs;
 
 -- Create secret for OneDrive
+-- WARNING: CREATE SECRET statements are stored in CLI history as plain text.
+-- Use environment variables or secret files instead of literal values in production.
 CREATE SECRET onedrive_secret (
     TYPE onedrive,
     PROVIDER config,

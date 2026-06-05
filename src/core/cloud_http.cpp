@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <thread>
@@ -58,8 +59,16 @@ CURL* CloudHttpClient::MakeCurl(HttpResponse& resp) {
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &resp);
     curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, HeaderCb);
     curl_easy_setopt(c, CURLOPT_HEADERDATA, &resp);
-    curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
+
+    // Security: verify both peer certificate AND hostname
     curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L); // Verify hostname matches cert
+
+    // Timeout strategy: separate connection and total timeouts
+    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT_MS, 30000L); // 30s connection timeout
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);             // 120s total timeout
+    curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);              // Thread-safe, no signals
+
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(c, CURLOPT_TCP_KEEPALIVE, 1L);
@@ -85,6 +94,10 @@ bool CloudHttpClient::ShouldRetry(long status, const CloudRetryPolicy& p) {
 void CloudHttpClient::WaitForRetry(int attempt, const CloudRetryPolicy& p) {
     int ms = (int)(p.initial_wait_ms * std::pow(p.backoff_factor, attempt));
     ms = std::min(ms, p.max_wait_ms);
+    // Add jitter: randomize ±20% to avoid thundering herd
+    int jitter = (ms * 20) / 100;
+    int jitter_offset = (rand() % (jitter * 2 + 1)) - jitter;
+    ms = std::max(0, ms + jitter_offset);
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
@@ -145,8 +158,16 @@ int64_t CloudHttpClient::ReadRange(const std::string& url, const std::string& ac
         HttpResponse resp_hdr; // for headers only
         CURL* c = curl_easy_init();
         curl_easy_setopt(c, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
+
+        // Security: verify both peer certificate AND hostname
         curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+
+        // Timeout strategy: separate connection and total timeouts
+        curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT_MS, 30000L);
+        curl_easy_setopt(c, CURLOPT_TIMEOUT, 120L);
+        curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
+
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
         curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteBufCb);
@@ -182,10 +203,28 @@ int64_t CloudHttpClient::ReadRange(const std::string& url, const std::string& ac
             WaitForRetry(attempt, policy);
             continue;
         }
-        if (status == 206)
-            return written; // ideal path
-        if (status == 200)
-            return std::min(written, length); // server ignored Range
+
+        // Strict range read handling: we expect 206 Partial Content
+        if (status == 206) {
+            return written; // ideal path: server honored Range header
+        }
+
+        // Server returned 200 OK - it ignored the Range header
+        // This is a data correctness issue: we asked for a specific slice
+        // but got a full response starting at offset 0.
+        // Only safe if we can verify Content-Range or offset is 0.
+        if (status == 200) {
+            // Check if we requested from offset 0
+            if (offset == 0 && written <= length) {
+                // Safe: full file starting at 0 is same as range from 0
+                return written;
+            }
+            // Otherwise, this is a correctness bug - don't silently return wrong data
+            err = "Server ignored Range header (returned 200 instead of 206) - data correctness "
+                  "issue";
+            return -1;
+        }
+
         err = "ReadRange HTTP " + std::to_string(status);
         return -1;
     }
@@ -242,6 +281,28 @@ HttpResponse CloudHttpClient::Patch(const std::string& url, const std::string& t
     r.SetBearerAuth(tok);
     r.headers["Content-Type"] = ct;
     return Execute(r);
+}
+
+// ─── URL encoding ─────────────────────────────────────────────────────────────
+std::string UrlUtil::Encode(const std::string& s) {
+    CURL* c = curl_easy_init();
+    char* enc = curl_easy_escape(c, s.c_str(), (int)s.size());
+    std::string result(enc);
+    curl_free(enc);
+    curl_easy_cleanup(c);
+    return result;
+}
+
+std::string UrlUtil::BuildQuery(const std::vector<std::pair<std::string, std::string>>& params) {
+    if (params.empty())
+        return "";
+    std::string q;
+    for (size_t i = 0; i < params.size(); ++i) {
+        if (i > 0)
+            q += "&";
+        q += Encode(params[i].first) + "=" + Encode(params[i].second);
+    }
+    return q;
 }
 
 // ─── JsonUtil ─────────────────────────────────────────────────────────────────
@@ -352,9 +413,48 @@ std::string JsonUtil::MakeObject(const std::vector<std::pair<std::string, std::s
     for (size_t i = 0; i < kv.size(); ++i) {
         if (i)
             s += ",";
-        s += "\"" + kv[i].first + "\":\"" + kv[i].second + "\"";
+        s += "\"" + EscapeJsonString(kv[i].first) + "\":\"" + EscapeJsonString(kv[i].second) + "\"";
     }
     return s + "}";
+}
+
+std::string JsonUtil::EscapeJsonString(const std::string& s) {
+    std::string result;
+    result.reserve(s.size());
+    for (char c : s) {
+        switch (c) {
+        case '"':
+            result += "\\\"";
+            break;
+        case '\\':
+            result += "\\\\";
+            break;
+        case '\b':
+            result += "\\b";
+            break;
+        case '\f':
+            result += "\\f";
+            break;
+        case '\n':
+            result += "\\n";
+            break;
+        case '\r':
+            result += "\\r";
+            break;
+        case '\t':
+            result += "\\t";
+            break;
+        default:
+            if ((unsigned char)c < 0x20) {
+                char buf[7];
+                snprintf(buf, sizeof(buf), "\\u%04x", (int)c);
+                result += buf;
+            } else {
+                result += c;
+            }
+        }
+    }
+    return result;
 }
 
 } // namespace duckdb

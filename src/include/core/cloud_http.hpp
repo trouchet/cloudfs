@@ -103,6 +103,17 @@ class CloudHttpClient {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// UrlUtil
+// Safe URL parameter encoding using libcurl's built-in percent-encoding.
+// ─────────────────────────────────────────────────────────────────────────────
+struct UrlUtil {
+    // Percent-encode a single string (for query params, path segments)
+    static std::string Encode(const std::string& s);
+    // Build a query string from key-value pairs (returns "k1=v1&k2=v2")
+    static std::string BuildQuery(const std::vector<std::pair<std::string, std::string>>& params);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // JsonUtil
 // Minimal JSON extraction — avoids a heavy dependency for simple API responses.
 // For complex responses, providers can link nlohmann/json or simdjson.
@@ -113,8 +124,10 @@ struct JsonUtil {
     static bool GetBool(const std::string& json, const std::string& key);
     // Extract array of raw JSON objects from "key": [{...}, {...}]
     static std::vector<std::string> GetArray(const std::string& json, const std::string& key);
-    // Simple JSON string builder
+    // Safe JSON string builder with proper escaping
     static std::string MakeObject(const std::vector<std::pair<std::string, std::string>>& kv);
+    // Escape a string for safe inclusion in JSON (handles quotes, backslashes, control chars)
+    static std::string EscapeJsonString(const std::string& s);
 };
 
 } // namespace duckdb

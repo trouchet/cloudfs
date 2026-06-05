@@ -19,6 +19,11 @@ namespace duckdb {
 // Thread safety: registrations happen at extension load time (single-threaded),
 // invocations happen at CREATE SECRET time (may be concurrent).
 // Reads are safe after initial setup because the vector is never grown after Load().
+//
+// Lifecycle: CloudSecretRegistry::Clear() is called at the start of each
+// LoadInternal() to remove stale CloudFileSystem* pointers from prior loads.
+// This prevents use-after-free when the extension is reloaded or loaded into
+// multiple DuckDB database instances within the same process.
 
 struct SecretDispatchEntry {
     CloudFileSystem* cfs;
@@ -46,8 +51,10 @@ MAKE_SLOT(0)
 MAKE_SLOT(1)
 MAKE_SLOT(2)
 MAKE_SLOT(3)
-MAKE_SLOT(4) MAKE_SLOT(5) MAKE_SLOT(6) MAKE_SLOT(7) MAKE_SLOT(8) MAKE_SLOT(9) MAKE_SLOT(10)
-    MAKE_SLOT(11) MAKE_SLOT(12) MAKE_SLOT(13) MAKE_SLOT(14) MAKE_SLOT(15)
+MAKE_SLOT(4)
+MAKE_SLOT(5)
+MAKE_SLOT(6) MAKE_SLOT(7) MAKE_SLOT(8) MAKE_SLOT(9) MAKE_SLOT(10) MAKE_SLOT(11) MAKE_SLOT(12)
+    MAKE_SLOT(13) MAKE_SLOT(14) MAKE_SLOT(15)
 
         static create_secret_function_t kSlots[] = {
             SecretSlot_0,  SecretSlot_1,  SecretSlot_2,  SecretSlot_3,

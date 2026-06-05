@@ -320,6 +320,12 @@ int64_t CloudFileSystem::GetFileSize(FileHandle& h) {
     return dynamic_cast<CloudFileHandle&>(h).file_size;
 }
 timestamp_t CloudFileSystem::GetLastModifiedTime(FileHandle& h) {
+    auto& cfh = dynamic_cast<CloudFileHandle&>(h);
+    if (cfh.item.modified_time_ms > 0) {
+        // Convert Unix milliseconds to DuckDB timestamp
+        return Timestamp::FromEpochMs(cfh.item.modified_time_ms);
+    }
+    // Fallback: if no modification time available, use current time
     return Timestamp::GetCurrentTimestamp();
 }
 FileType CloudFileSystem::GetFileType(FileHandle& h) {

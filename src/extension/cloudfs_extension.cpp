@@ -17,7 +17,15 @@
 
 namespace duckdb {
 
-// Raw observer pointer; VFS owns the unique_ptr.
+// NOTE: This global pointer is ONLY valid during LoadInternal and is used ONLY
+// to pass the CloudFileSystem instance to CloudSecretRegistry::Register.
+// The SecretDispatchEntry stores this pointer for CREATE SECRET callbacks.
+// CloudSecretRegistry::Clear() at the start of LoadInternal ensures the dispatch
+// table is emptied before each load, preventing stale pointers from prior loads.
+//
+// Ideally, DuckDB extension API would provide per-database-instance storage or
+// a teardown hook to remove this global state entirely. Until then, this design
+// ensures correctness by clearing stale entries at each reload.
 static CloudFileSystem* g_cfs = nullptr;
 
 // ─────────────────────────────────────────────────────────────────────────────

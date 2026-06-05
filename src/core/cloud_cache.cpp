@@ -128,6 +128,8 @@ template <typename Map> void CloudCache::EvictExpired(Map& map) {
 
 template <typename Map> void CloudCache::EvictOldest(Map& map, size_t target) {
     EvictExpired(map);
+    // Note: O(n) eviction is acceptable for small caches (kMaxItems=512).
+    // For larger caches, consider a priority queue or LRU list.
     while (map.size() > target) {
         auto oldest = map.begin();
         for (auto it = map.begin(); it != map.end(); ++it)
