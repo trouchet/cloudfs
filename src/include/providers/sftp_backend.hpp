@@ -36,7 +36,7 @@ namespace duckdb {
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct SSHConnection {
-    int socket_fd = -1;
+    libssh2_socket_t socket_fd = LIBSSH2_INVALID_SOCKET;
     LIBSSH2_SESSION* session = nullptr;
     LIBSSH2_SFTP* sftp = nullptr;
 
