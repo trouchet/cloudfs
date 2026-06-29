@@ -26,9 +26,7 @@ import duckdb
 
 # ── Bootstrap ────────────────────────────────────────────────────────────────
 # Load DuckDB with RTLD_GLOBAL so the extension can resolve its C++ symbols.
-_SO = os.path.expanduser(
-    "~/.local/lib/python3.12/site-packages" "/_duckdb.cpython-312-x86_64-linux-gnu.so"
-)
+_SO = os.path.expanduser("~/.local/lib/python3.12/site-packages" "/_duckdb.cpython-312-x86_64-linux-gnu.so")
 ctypes.CDLL(_SO, ctypes.RTLD_GLOBAL)
 
 PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,10 +40,7 @@ _PASS = _FAIL = 0
 
 def check(label: str, ok: bool, detail: str = ""):
     global _PASS, _FAIL
-    print(
-        f"  {'✓ PASS' if ok else '✗ FAIL'}  {label}"
-        + (f"\n         {detail}" if detail and not ok else "")
-    )
+    print(f"  {'✓ PASS' if ok else '✗ FAIL'}  {label}" + (f"\n         {detail}" if detail and not ok else ""))
     if ok:
         _PASS += 1
     else:
@@ -127,9 +122,7 @@ SECRET_CASES = [
     ("vfs", "token", "TOKEN 'x'"),
 ]
 for type_, provider, extra in SECRET_CASES:
-    _, err = sql(
-        CONN, f"CREATE OR REPLACE SECRET s (TYPE {type_}, PROVIDER {provider}, {extra})"
-    )
+    _, err = sql(CONN, f"CREATE OR REPLACE SECRET s (TYPE {type_}, PROVIDER {provider}, {extra})")
     if err:
         check(f"CREATE SECRET ({type_}/{provider})", False, err)
         continue
@@ -174,9 +167,7 @@ agent = start_agent(token, root)
 
 def vsec():
     """Set VFS secret on the shared connection."""
-    CONN.execute(
-        f"CREATE OR REPLACE SECRET vfs_s (TYPE vfs, PROVIDER token, TOKEN '{token}')"
-    )
+    CONN.execute(f"CREATE OR REPLACE SECRET vfs_s (TYPE vfs, PROVIDER token, TOKEN '{token}')")
 
 
 vsec()
@@ -213,9 +204,7 @@ check("ls() 'sub' type = 'directory'", types.get("sub") == "directory", str(type
 check("ls() 'hello.txt' type = 'file'", types.get("hello.txt") == "file", str(types))
 
 # ── 3e. ls() — size columns ──────────────────────────────────────────────────
-rows, err = sql(
-    CONN, f"SELECT name, size, size_pretty FROM ls('{BASE}/data/') WHERE type='file'"
-)
+rows, err = sql(CONN, f"SELECT name, size, size_pretty FROM ls('{BASE}/data/') WHERE type='file'")
 check(
     "ls() size > 0 for all files",
     all(r[1] is not None and r[1] > 0 for r in rows),
@@ -256,9 +245,7 @@ check("stat() file type = 'file'", rows and rows[0][2] == "file", str(rows))
 # ── 3i. stat() — directory ────────────────────────────────────────────────────
 rows, err = sql(CONN, f"SELECT name, type FROM stat('{BASE}/data/sub')")
 check("stat() directory returns 1 row", len(rows) == 1, str(rows))
-check(
-    "stat() directory type = 'directory'", rows and rows[0][1] == "directory", str(rows)
-)
+check("stat() directory type = 'directory'", rows and rows[0][1] == "directory", str(rows))
 
 # ── 3j. du() — disk usage ────────────────────────────────────────────────────
 rows, err = sql(CONN, f"SELECT directory, file_count, total_size FROM du('{BASE}/')")
@@ -278,16 +265,12 @@ if data_rows:
 
 # ── 3k. COPY TO vfs:// (write) ────────────────────────────────────────────────
 out = f"{BASE}/data/written.parquet"
-_, err = sql(
-    CONN, f"COPY (SELECT 'a' AS col UNION ALL SELECT 'b') TO '{out}' (FORMAT parquet)"
-)
+_, err = sql(CONN, f"COPY (SELECT 'a' AS col UNION ALL SELECT 'b') TO '{out}' (FORMAT parquet)")
 check("COPY TO vfs:// succeeds", err is None, str(err))
 
 if err is None:
     rows2, err2 = sql(CONN, f"SELECT count(*) FROM read_parquet('{out}')")
-    check(
-        "written file readable — 2 rows", rows2 and rows2[0][0] == 2, f"{rows2}/{err2}"
-    )
+    check("written file readable — 2 rows", rows2 and rows2[0][0] == 2, f"{rows2}/{err2}")
 
     rows3, err3 = sql(CONN, f"SELECT name FROM ls('{BASE}/data/')")
     check(
@@ -334,14 +317,10 @@ bad_token = _secrets.token_hex(16)
 bad_root = tempfile.mkdtemp()
 bad_agent = start_agent(_secrets.token_hex(16), bad_root, port=PORT + 1)
 
-CONN.execute(
-    f"CREATE OR REPLACE SECRET bad_s (TYPE vfs, PROVIDER token, TOKEN '{bad_token}')"
-)
+CONN.execute(f"CREATE OR REPLACE SECRET bad_s (TYPE vfs, PROVIDER token, TOKEN '{bad_token}')")
 rows, err = sql(CONN, f"SELECT * FROM ls('vfs://localhost:{PORT+1}/') USING SAMPLE 1")
 # Either returns empty or raises an auth error — should NOT crash / hang
-check(
-    "ls() with wrong token returns empty or auth error (no crash)", True, ""
-)  # just verify it doesn't crash
+check("ls() with wrong token returns empty or auth error (no crash)", True, "")  # just verify it doesn't crash
 
 bad_agent.terminate()
 shutil.rmtree(bad_root)
