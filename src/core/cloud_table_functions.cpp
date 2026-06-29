@@ -106,7 +106,7 @@ struct LsScanState : public GlobalTableFunctionState {
 };
 
 // Fetch one page of items from the current folder and populate buffer/stack
-static void FetchNextBatch(LsBindData& bind, LsScanState& state) {
+static void FetchNextBatch(const LsBindData& bind, LsScanState& state) {
     if (state.folder_stack.empty() && state.current_cursor.empty()) {
         state.finished = true;
         return;
@@ -262,7 +262,7 @@ static void LsScan(ClientContext&, TableFunctionInput& data_p, DataChunk& output
 
         // Recursively call to fill output (tail recursion optimized away by compiler)
         if (!state.buffer.empty() && count < STANDARD_VECTOR_SIZE) {
-            return LsScan(data_p.context, data_p, output);
+            return LsScan(context, data_p, output);
         }
     }
 
@@ -420,7 +420,7 @@ struct DuScanState : public GlobalTableFunctionState {
 };
 
 // Process next folder in the du() scan
-static void ProcessDuFolder(DuBindData& bind, DuScanState& state) {
+static void ProcessDuFolder(const DuBindData& bind, DuScanState& state) {
     if (state.stack.empty()) {
         state.finished = true;
         return;
