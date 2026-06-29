@@ -1,2 +1,17 @@
-{ "name": "cloudfs", "version-string": "0.1.0",
-  "dependencies": ["openssl", "curl"] }
+{
+    "name": "cloudfs",
+    "version-string": "0.1.0",
+    "dependencies": [
+        "openssl",
+        "curl",
+        "libssh2"
+    ],
+    "vcpkg-configuration": {
+        "overlay-ports": [
+            "./extension-ci-tools/vcpkg_ports"
+        ],
+        "overlay-triplets": [
+            "./extension-ci-tools/toolchains"
+        ]
+    }
+}
