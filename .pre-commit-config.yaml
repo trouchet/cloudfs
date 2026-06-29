@@ -93,12 +93,13 @@ repos:
   # ============================================================================
   # Commit Message Validation (commitlint)
   # ============================================================================
-  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
-    rev: v9.11.0
+  - repo: local
     hooks:
       - id: commitlint
+        name: commitlint
+        language: system
+        entry: node_modules/.bin/commitlint --edit
         stages: [commit-msg]
-        additional_dependencies: ['@commitlint/config-conventional']
 
   # ============================================================================
   # Secrets Detection
