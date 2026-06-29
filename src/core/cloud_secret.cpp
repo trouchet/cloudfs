@@ -53,15 +53,25 @@ MAKE_SLOT(2)
 MAKE_SLOT(3)
 MAKE_SLOT(4)
 MAKE_SLOT(5)
-MAKE_SLOT(6) MAKE_SLOT(7) MAKE_SLOT(8) MAKE_SLOT(9) MAKE_SLOT(10) MAKE_SLOT(11) MAKE_SLOT(12)
-    MAKE_SLOT(13) MAKE_SLOT(14) MAKE_SLOT(15)
+MAKE_SLOT(6)
+MAKE_SLOT(7)
+MAKE_SLOT(8)
+MAKE_SLOT(9)
+MAKE_SLOT(10)
+MAKE_SLOT(11)
+MAKE_SLOT(12)
+MAKE_SLOT(13)
+MAKE_SLOT(14)
+MAKE_SLOT(15)
 
-        static create_secret_function_t kSlots[] = {
-            SecretSlot_0,  SecretSlot_1,  SecretSlot_2,  SecretSlot_3,
-            SecretSlot_4,  SecretSlot_5,  SecretSlot_6,  SecretSlot_7,
-            SecretSlot_8,  SecretSlot_9,  SecretSlot_10, SecretSlot_11,
-            SecretSlot_12, SecretSlot_13, SecretSlot_14, SecretSlot_15,
+// clang-format off
+static create_secret_function_t kSlots[] = {
+    SecretSlot_0,  SecretSlot_1,  SecretSlot_2,  SecretSlot_3,
+    SecretSlot_4,  SecretSlot_5,  SecretSlot_6,  SecretSlot_7,
+    SecretSlot_8,  SecretSlot_9,  SecretSlot_10, SecretSlot_11,
+    SecretSlot_12, SecretSlot_13, SecretSlot_14, SecretSlot_15,
 };
+// clang-format on
 static constexpr size_t kMaxSlots = sizeof(kSlots) / sizeof(kSlots[0]);
 
 // ─── CloudSecretRegistry::Clear ──────────────────────────────────────────────

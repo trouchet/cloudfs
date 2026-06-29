@@ -1,50 +1,31 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
+
 set(TARGET_NAME cloudfs)
-set(CMAKE_CXX_STANDARD
-    "17"
-    CACHE STRING "C++ standard")
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(EXTENSION_NAME ${TARGET_NAME}_extension)
+set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 
 project(${TARGET_NAME})
 
-# Ubuntu multiarch puts libs in /usr/lib/x86_64-linux-gnu — cmake won't find
-# them unless we add that path explicitly.
-list(APPEND CMAKE_LIBRARY_PATH /usr/lib/x86_64-linux-gnu)
-list(APPEND CMAKE_INCLUDE_PATH /usr/include/x86_64-linux-gnu)
+set(CMAKE_CXX_STANDARD
+    "17"
+    CACHE STRING "C++ standard to enforce" FORCE)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
+find_package(ZLIB REQUIRED)
 
-# Find libssh2 without requiring pkg-config
-find_library(
-  LIBSSH2_LIBRARIES
-  NAMES ssh2
-  PATHS /usr/lib/x86_64-linux-gnu /usr/lib /usr/local/lib REQUIRED)
-find_path(
-  LIBSSH2_INCLUDE_DIRS
-  NAMES libssh2.h
-  PATHS /usr/include /usr/local/include REQUIRED)
+find_library(LIBSSH2_LIBRARIES NAMES ssh2 libssh2)
+find_path(LIBSSH2_INCLUDE_DIRS NAMES libssh2.h)
 
-# DuckDB: headers + static library. The static library is linked INTO the
-# extension (making it self-contained). libduckdb_static.a + headers from the
-# official release package at /tmp/libduckdb/.
-if(NOT DUCKDB_INCLUDE_DIR)
-  set(DUCKDB_INCLUDE_DIR "/tmp/duckdb-headers/src/include")
-endif()
-if(NOT DUCKDB_STATIC_LIB)
-  set(DUCKDB_STATIC_LIB "/tmp/libduckdb/libduckdb_static.a")
-endif()
+include_directories(src/include)
 
-set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
-
-include_directories(src/include ${DUCKDB_INCLUDE_DIR})
-
-# ── Core sources ──────────────────────────────────────────────────────────────
 set(CORE_SOURCES
     src/core/cloud_cache.cpp src/core/cloud_http.cpp src/core/cloud_auth.cpp
-    src/core/cloud_filesystem.cpp src/core/cloud_secret.cpp)
+    src/core/cloud_filesystem.cpp src/core/cloud_secret.cpp
+    src/core/cloud_table_functions.cpp)
 
-# ── Provider sources ──────────────────────────────────────────────────────────
 set(PROVIDER_SOURCES
     src/providers/sharepoint/sharepoint_backend.cpp
     src/providers/sharepoint/sharepoint_auth.cpp
@@ -55,40 +36,29 @@ set(PROVIDER_SOURCES
     src/providers/dropbox/dropbox_backend.cpp
     src/providers/dropbox/dropbox_auth.cpp
     src/providers/sftp/sftp_backend.cpp
-    src/providers/vfs/vfs_backend.cpp
-    src/core/cloud_table_functions.cpp)
+    src/providers/vfs/vfs_backend.cpp)
 
-# ── Extension entry point ─────────────────────────────────────────────────────
 set(EXTENSION_SOURCES src/extension/cloudfs_extension.cpp ${CORE_SOURCES}
                       ${PROVIDER_SOURCES})
 
-# ── Loadable extension (.duckdb_extension shared library) ─────────────────────
-add_library(${LOADABLE_EXTENSION_NAME} SHARED ${EXTENSION_SOURCES})
+build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
+build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-target_link_libraries(
-  ${LOADABLE_EXTENSION_NAME}
-  ${DUCKDB_STATIC_LIB}
-  OpenSSL::SSL
-  OpenSSL::Crypto
-  CURL::libcurl
-  ${LIBSSH2_LIBRARIES}
-  pthread
-  dl)
+set(EXTENSION_LINK_LIBS OpenSSL::SSL OpenSSL::Crypto CURL::libcurl
+                        ${LIBSSH2_LIBRARIES} ZLIB::ZLIB)
+
+target_link_libraries(${EXTENSION_NAME} ${EXTENSION_LINK_LIBS})
+target_link_libraries(${LOADABLE_EXTENSION_NAME} ${EXTENSION_LINK_LIBS})
+
+target_include_directories(${EXTENSION_NAME} PRIVATE ${LIBSSH2_INCLUDE_DIRS})
 target_include_directories(${LOADABLE_EXTENSION_NAME}
                            PRIVATE ${LIBSSH2_INCLUDE_DIRS})
 
-# DuckDB headers define some constants inline in every TU that includes them,
-# causing duplicate-definition errors when also linking against
-# libduckdb_static. Both definitions are identical so taking the first one is
-# safe.
-target_link_options(${LOADABLE_EXTENSION_NAME} PRIVATE
-                    -Wl,--allow-multiple-definition)
+set_target_properties(${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME}
+                      PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 
-set_target_properties(
-  ${LOADABLE_EXTENSION_NAME}
-  PROPERTIES OUTPUT_NAME ${TARGET_NAME}
-             PREFIX ""
-             SUFFIX ".duckdb_extension")
-
-install(TARGETS ${LOADABLE_EXTENSION_NAME}
-        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(
+  TARGETS ${EXTENSION_NAME}
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

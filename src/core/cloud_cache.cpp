@@ -2,6 +2,16 @@
 
 namespace duckdb {
 
+namespace {
+template <typename Map> void StripPrefix(Map& map, const std::string& pfx) {
+    for (auto it = map.begin(); it != map.end();)
+        if (it->first.substr(0, pfx.size()) == pfx)
+            it = map.erase(it);
+        else
+            ++it;
+}
+} // namespace
+
 using Clock = std::chrono::system_clock;
 
 // ── Item cache ────────────────────────────────────────────────────────────────
@@ -90,18 +100,9 @@ void CloudCache::PutRootId(const std::string& scheme, const std::string& key,
 void CloudCache::ClearScheme(const std::string& scheme) {
     std::lock_guard<std::mutex> lk(mu_);
     std::string pfx = scheme + ":";
-    for (auto* m : {(void*)&items_, (void*)&urls_, (void*)&roots_})
-        (void)m; // suppress warning
-    auto strip = [&pfx](auto& map) {
-        for (auto it = map.begin(); it != map.end();)
-            if (it->first.substr(0, pfx.size()) == pfx)
-                it = map.erase(it);
-            else
-                ++it;
-    };
-    strip(items_);
-    strip(urls_);
-    strip(roots_);
+    StripPrefix(items_, pfx);
+    StripPrefix(urls_, pfx);
+    StripPrefix(roots_, pfx);
 }
 
 void CloudCache::ClearAll() {

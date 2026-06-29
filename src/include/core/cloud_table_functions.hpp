@@ -56,13 +56,8 @@ TableFunction StatTableFunction(CloudFileSystem* cfs);
 TableFunction DuTableFunction(CloudFileSystem* cfs);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: set global CFS pointer (called once at extension load)
-// ─────────────────────────────────────────────────────────────────────────────
-void SetCloudFS(CloudFileSystem* cfs);
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Helper: register all three with the loader
-// ─────────────────────────────────────────────────────────────────────────────
-void RegisterCloudTableFunctions(ExtensionLoader& loader);
+// ───────────────────────────────────────────────────────────────────────────
+void RegisterCloudTableFunctions(ExtensionLoader& loader, CloudFileSystem* cfs);
 
 } // namespace duckdb

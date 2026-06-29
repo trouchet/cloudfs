@@ -10,6 +10,18 @@
 #include <memory>
 #include <mutex>
 
+// Windows SDK defines CreateDirectory/RemoveDirectory/MoveFile as macros
+// that expand to CreateDirectoryA/W etc., breaking the override declarations.
+#ifdef CreateDirectory
+#undef CreateDirectory
+#endif
+#ifdef RemoveDirectory
+#undef RemoveDirectory
+#endif
+#ifdef MoveFile
+#undef MoveFile
+#endif
+
 namespace duckdb {
 
 class CloudFileHandle;

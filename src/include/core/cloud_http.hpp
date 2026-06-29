@@ -1,4 +1,10 @@
 #pragma once
+// Must be defined before any Windows header (pulled in by curl/curl.h on Windows)
+// to prevent min/max macro pollution that breaks std::min/std::max.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <functional>
 #include <string>
 #include <unordered_map>

@@ -34,14 +34,16 @@ class GDriveBackend : public ICloudBackend {
     std::string Name() const override { return "Google Drive"; }
 
     ProviderCapabilities Capabilities() const override {
-        return {.supports_range_reads = true,       // via Range header on alt=media
-                .supports_resumable_uploads = true, // resumable upload protocol
-                .supports_server_side_copy = true,  // files.copy API
-                .supports_recursive_list = false,
-                .needs_total_size_upfront = false,
-                .upload_chunk_alignment = 256 * 1024, // 256 KiB (Google requirement)
-                .min_upload_chunk = 256 * 1024,
-                .max_upload_chunk = 256 * 1024 * 1024};
+        ProviderCapabilities caps;
+        caps.supports_range_reads = true;       // via Range header on alt=media
+        caps.supports_resumable_uploads = true; // resumable upload protocol
+        caps.supports_server_side_copy = true;  // files.copy API
+        caps.supports_recursive_list = false;
+        caps.needs_total_size_upfront = false;
+        caps.upload_chunk_alignment = 256 * 1024; // 256 KiB (Google requirement)
+        caps.min_upload_chunk = 256 * 1024;
+        caps.max_upload_chunk = 256 * 1024 * 1024;
+        return caps;
     }
 
     bool ParseUrl(const std::string& url, std::string& out_root, std::string& out_path,

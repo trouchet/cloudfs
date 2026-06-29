@@ -97,8 +97,10 @@ repos:
     rev: v9.25.0
     hooks:
       - id: commitlint
+        name: commitlint
+        language: system
+        entry: node_modules/.bin/commitlint --edit
         stages: [commit-msg]
-        additional_dependencies: ['@commitlint/config-conventional']
 
   # ============================================================================
   # Secrets Detection

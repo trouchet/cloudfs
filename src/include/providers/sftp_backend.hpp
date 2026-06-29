@@ -36,7 +36,7 @@ namespace duckdb {
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct SSHConnection {
-    int socket_fd = -1;
+    libssh2_socket_t socket_fd = LIBSSH2_INVALID_SOCKET;
     LIBSSH2_SESSION* session = nullptr;
     LIBSSH2_SFTP* sftp = nullptr;
 
@@ -53,14 +53,16 @@ class SFTPBackend : public ICloudBackend {
     std::string Name() const override { return "SFTP"; }
 
     ProviderCapabilities Capabilities() const override {
-        return {.supports_range_reads = true,        // via sftp_seek64
-                .supports_resumable_uploads = false, // simple streaming write
-                .supports_server_side_copy = false,
-                .supports_recursive_list = false,
-                .needs_total_size_upfront = false,
-                .upload_chunk_alignment = 1,
-                .min_upload_chunk = 1,
-                .max_upload_chunk = 32 * 1024 * 1024};
+        ProviderCapabilities caps;
+        caps.supports_range_reads = true;        // via sftp_seek64
+        caps.supports_resumable_uploads = false; // simple streaming write
+        caps.supports_server_side_copy = false;
+        caps.supports_recursive_list = false;
+        caps.needs_total_size_upfront = false;
+        caps.upload_chunk_alignment = 1;
+        caps.min_upload_chunk = 1;
+        caps.max_upload_chunk = 32 * 1024 * 1024;
+        return caps;
     }
 
     // sftp://user@host:port/path  →  root="user@host:port"  path="/path"

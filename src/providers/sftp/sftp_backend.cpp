@@ -3,10 +3,31 @@
 #include <cstring>
 #include <sstream>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+using socket_fd_t = SOCKET;
+static const socket_fd_t kInvalidSocket = INVALID_SOCKET;
+static void close_socket(socket_fd_t fd) {
+    closesocket(fd);
+}
+#else
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+using socket_fd_t = int;
+static const socket_fd_t kInvalidSocket = -1;
+static void close_socket(socket_fd_t fd) {
+    ::close(fd);
+}
+#endif
 
 namespace duckdb {
 
@@ -28,9 +49,9 @@ void SSHConnection::Close() {
         libssh2_session_free(session);
         session = nullptr;
     }
-    if (socket_fd >= 0) {
-        ::close(socket_fd);
-        socket_fd = -1;
+    if (socket_fd != kInvalidSocket) {
+        close_socket(socket_fd);
+        socket_fd = kInvalidSocket;
     }
 }
 
@@ -79,7 +100,7 @@ static bool ParseRoot(const std::string& root, std::string& out_user, std::strin
     return true;
 }
 
-static int ConnectSocket(const std::string& host, int port, std::string& err) {
+static socket_fd_t ConnectSocket(const std::string& host, int port, std::string& err) {
     struct addrinfo hints {
     }, *res = nullptr;
     hints.ai_family = AF_UNSPEC;
@@ -87,13 +108,13 @@ static int ConnectSocket(const std::string& host, int port, std::string& err) {
     std::string port_str = std::to_string(port);
     if (getaddrinfo(host.c_str(), port_str.c_str(), &hints, &res) != 0) {
         err = "DNS resolution failed for: " + host;
-        return -1;
+        return kInvalidSocket;
     }
-    int fd = ::socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (fd < 0 || ::connect(fd, res->ai_addr, res->ai_addrlen) != 0) {
+    socket_fd_t fd = ::socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (fd == kInvalidSocket || ::connect(fd, res->ai_addr, res->ai_addrlen) != 0) {
         freeaddrinfo(res);
         err = "TCP connect failed to " + host + ":" + port_str;
-        return -1;
+        return kInvalidSocket;
     }
     freeaddrinfo(res);
     return fd;
@@ -120,7 +141,7 @@ SSHConnection& SFTPBackend::GetConnection(const std::string& root, const std::st
 
     SSHConnection conn;
     conn.socket_fd = ConnectSocket(host, port, err);
-    if (conn.socket_fd < 0) {
+    if (conn.socket_fd == kInvalidSocket) {
         static SSHConnection bad;
         return bad;
     }
@@ -128,7 +149,7 @@ SSHConnection& SFTPBackend::GetConnection(const std::string& root, const std::st
     conn.session = libssh2_session_init();
     if (!conn.session) {
         err = "libssh2_session_init failed";
-        ::close(conn.socket_fd);
+        close_socket(conn.socket_fd);
         static SSHConnection bad;
         return bad;
     }

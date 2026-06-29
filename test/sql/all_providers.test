@@ -1,5 +1,5 @@
 # name: test/sql/all_providers.test
-# group: [cloudfs]
+# group: [sql]
 
 require cloudfs
 
@@ -55,18 +55,26 @@ OK: all caches cleared
 # No crash on spfs:// without real credentials
 statement error
 SELECT * FROM read_parquet('spfs://x.sharepoint.com/sites/A/Docs/f.parquet') LIMIT 1;
+----
+Error
 
 # No crash on odfs://
 statement error
 SELECT * FROM read_parquet('odfs://me/Documents/f.parquet') LIMIT 1;
+----
+Error
 
 # No crash on gdfs://
 statement error
 SELECT * FROM read_parquet('gdfs://MyDrive/data/f.parquet') LIMIT 1;
+----
+Error
 
 # No crash on dbxfs://
 statement error
 SELECT * FROM read_parquet('dbxfs://data/f.parquet') LIMIT 1;
+----
+Error
 
 # Cleanup
 statement ok
