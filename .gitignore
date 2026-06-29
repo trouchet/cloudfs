@@ -55,3 +55,7 @@ htmlcov/
 
 # Secrets
 .secrets.baseline
+
+# Local Docker build helpers
+docker_env.txt
+ccache_dir/
