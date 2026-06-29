@@ -44,11 +44,21 @@ set(EXTENSION_SOURCES src/extension/cloudfs_extension.cpp ${CORE_SOURCES}
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-set(EXTENSION_LINK_LIBS OpenSSL::SSL OpenSSL::Crypto CURL::libcurl
-                        ${LIBSSH2_LIBRARIES} ZLIB::ZLIB)
+set(EXTENSION_LINK_LIBS CURL::libcurl ${LIBSSH2_LIBRARIES} OpenSSL::SSL
+                        OpenSSL::Crypto ZLIB::ZLIB)
 
-target_link_libraries(${EXTENSION_NAME} ${EXTENSION_LINK_LIBS})
-target_link_libraries(${LOADABLE_EXTENSION_NAME} ${EXTENSION_LINK_LIBS})
+# MinGW's GNU ld resolves static archives left-to-right in a single pass.
+# libssh2 and curl both reference OpenSSL symbols; wrapping with --start-group
+# makes ld rescan until all cross-references are satisfied.
+if(MINGW)
+  target_link_libraries(${EXTENSION_NAME} -Wl,--start-group
+                        ${EXTENSION_LINK_LIBS} -Wl,--end-group)
+  target_link_libraries(${LOADABLE_EXTENSION_NAME} -Wl,--start-group
+                        ${EXTENSION_LINK_LIBS} -Wl,--end-group)
+else()
+  target_link_libraries(${EXTENSION_NAME} ${EXTENSION_LINK_LIBS})
+  target_link_libraries(${LOADABLE_EXTENSION_NAME} ${EXTENSION_LINK_LIBS})
+endif()
 
 target_include_directories(${EXTENSION_NAME} PRIVATE ${LIBSSH2_INCLUDE_DIRS})
 target_include_directories(${LOADABLE_EXTENSION_NAME}
