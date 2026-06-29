@@ -11,7 +11,29 @@
 #include <cstdio>
 #include <cstring>
 
-#include <fnmatch.h>
+// Portable glob wildcard match (replaces POSIX fnmatch for Windows compat).
+// Supports '*' (any sequence) and '?' (any single char). Returns 0 on match.
+static int glob_match(const char* pattern, const char* name) {
+    while (*pattern && *name) {
+        if (*pattern == '*') {
+            while (*pattern == '*')
+                ++pattern;
+            if (!*pattern)
+                return 0;
+            while (*name)
+                if (glob_match(pattern, name++) == 0)
+                    return 0;
+            return 1;
+        }
+        if (*pattern != '?' && *pattern != *name)
+            return 1;
+        ++pattern;
+        ++name;
+    }
+    while (*pattern == '*')
+        ++pattern;
+    return (*pattern || *name) ? 1 : 0;
+}
 
 namespace duckdb {
 
@@ -138,7 +160,7 @@ static void FetchNextBatch(const LsBindData& bind, LsScanState& state) {
     for (auto& item : batch) {
         std::string item_url = url_prefix + "/" + item.name;
         bool name_matches = (bind.pattern.empty() || bind.pattern == "*" ||
-                             fnmatch(bind.pattern.c_str(), item.name.c_str(), 0) == 0);
+                             glob_match(bind.pattern.c_str(), item.name.c_str()) == 0);
 
         if (name_matches || item.is_folder) {
             state.buffer.emplace_back(item_url, item);
