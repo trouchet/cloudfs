@@ -1,7 +1,5 @@
 #pragma once
 #define DUCKDB_EXTENSION_MAIN
-#include "core/cloud_filesystem.hpp"
-
 #include "duckdb.hpp"
 
 namespace duckdb {
