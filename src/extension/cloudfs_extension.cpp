@@ -256,13 +256,13 @@ static void LoadInternal(ExtensionLoader& loader) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-void CloudFsExtension::Load(ExtensionLoader& loader) {
+void CloudfsExtension::Load(ExtensionLoader& loader) {
     LoadInternal(loader);
 }
-std::string CloudFsExtension::Name() {
+std::string CloudfsExtension::Name() {
     return "cloudfs";
 }
-std::string CloudFsExtension::Version() const {
+std::string CloudfsExtension::Version() const {
 #ifdef EXT_VERSION_CLOUDFS
     return EXT_VERSION_CLOUDFS;
 #else
