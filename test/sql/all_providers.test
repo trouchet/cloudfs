@@ -1,5 +1,5 @@
 # name: test/sql/all_providers.test
-# group: [cloudfs]
+# group: [sql]
 
 require cloudfs
 
