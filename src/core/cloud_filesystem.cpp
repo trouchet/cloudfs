@@ -6,7 +6,29 @@
 #include <algorithm>
 #include <cstring>
 
-#include <fnmatch.h>
+// Portable glob wildcard match (replaces POSIX fnmatch for Windows compat).
+// Supports '*' (any sequence) and '?' (any single char). Returns 0 on match.
+static int glob_match(const char* pattern, const char* name) {
+    while (*pattern && *name) {
+        if (*pattern == '*') {
+            while (*pattern == '*')
+                ++pattern;
+            if (!*pattern)
+                return 0;
+            while (*name)
+                if (glob_match(pattern, name++) == 0)
+                    return 0;
+            return 1;
+        }
+        if (*pattern != '?' && *pattern != *name)
+            return 1;
+        ++pattern;
+        ++name;
+    }
+    while (*pattern == '*')
+        ++pattern;
+    return (*pattern || *name) ? 1 : 0;
+}
 
 namespace duckdb {
 
@@ -460,7 +482,7 @@ void CloudFileSystem::GlobRecursive(ICloudBackend& backend, const std::string& r
             break;
         for (auto& child : batch) {
             std::string child_url = scheme_prefix + "/" + child.name;
-            int match = fnmatch(file_pattern.c_str(), child.name.c_str(), 0);
+            int match = glob_match(file_pattern.c_str(), child.name.c_str());
             if (child.is_folder) {
                 if (recursive)
                     GlobRecursive(backend, root_id, child.id, child_url, file_pattern, recursive,
