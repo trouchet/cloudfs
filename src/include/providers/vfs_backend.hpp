@@ -47,14 +47,16 @@ class VFSBackend : public ICloudBackend {
     std::string Name() const override { return "VFS Agent"; }
 
     ProviderCapabilities Capabilities() const override {
-        return {.supports_range_reads = true,
-                .supports_resumable_uploads = true,
-                .supports_server_side_copy = false,
-                .supports_recursive_list = false,
-                .needs_total_size_upfront = false,
-                .upload_chunk_alignment = 1, // agent accepts any chunk size
-                .min_upload_chunk = 1,
-                .max_upload_chunk = 128 * 1024 * 1024};
+        ProviderCapabilities caps;
+        caps.supports_range_reads = true;
+        caps.supports_resumable_uploads = true;
+        caps.supports_server_side_copy = false;
+        caps.supports_recursive_list = false;
+        caps.needs_total_size_upfront = false;
+        caps.upload_chunk_alignment = 1; // agent accepts any chunk size
+        caps.min_upload_chunk = 1;
+        caps.max_upload_chunk = 128 * 1024 * 1024;
+        return caps;
     }
 
     // vfs://host:port/path  →  root="http://host:port"  path="/path"

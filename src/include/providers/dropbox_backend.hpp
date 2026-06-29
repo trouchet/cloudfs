@@ -36,16 +36,16 @@ class DropboxBackend : public ICloudBackend {
     std::string Name() const override { return "Dropbox"; }
 
     ProviderCapabilities Capabilities() const override {
-        return {
-            .supports_range_reads = true,
-            .supports_resumable_uploads = true,
-            .supports_server_side_copy = true, // /files/copy_v2
-            .supports_recursive_list = true,   // recursive=true in list_folder
-            .needs_total_size_upfront = false, // only needed at finish step
-            .upload_chunk_alignment = 1,       // any size accepted
-            .min_upload_chunk = 1,
-            .max_upload_chunk = 150 * 1024 * 1024 // 150 MiB Dropbox limit
-        };
+        ProviderCapabilities caps;
+        caps.supports_range_reads = true;
+        caps.supports_resumable_uploads = true;
+        caps.supports_server_side_copy = true; // /files/copy_v2
+        caps.supports_recursive_list = true;   // recursive=true in list_folder
+        caps.needs_total_size_upfront = false; // only needed at finish step
+        caps.upload_chunk_alignment = 1;       // any size accepted
+        caps.min_upload_chunk = 1;
+        caps.max_upload_chunk = 150 * 1024 * 1024; // 150 MiB Dropbox limit
+        return caps;
     }
 
     bool ParseUrl(const std::string& url, std::string& out_root, std::string& out_path,

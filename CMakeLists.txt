@@ -9,7 +9,7 @@ project(${TARGET_NAME})
 
 set(CMAKE_CXX_STANDARD
     "17"
-    CACHE STRING "C++ standard to enforce")
+    CACHE STRING "C++ standard to enforce" FORCE)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenSSL REQUIRED)
@@ -52,6 +52,9 @@ target_link_libraries(${LOADABLE_EXTENSION_NAME} ${EXTENSION_LINK_LIBS})
 target_include_directories(${EXTENSION_NAME} PRIVATE ${LIBSSH2_INCLUDE_DIRS})
 target_include_directories(${LOADABLE_EXTENSION_NAME}
                            PRIVATE ${LIBSSH2_INCLUDE_DIRS})
+
+set_target_properties(${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME}
+                      PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 
 install(
   TARGETS ${EXTENSION_NAME}

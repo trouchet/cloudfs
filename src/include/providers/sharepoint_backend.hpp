@@ -24,16 +24,16 @@ class SharePointBackend : public ICloudBackend {
     std::string Name() const override { return "SharePoint"; }
 
     ProviderCapabilities Capabilities() const override {
-        return {
-            .supports_range_reads = true,
-            .supports_resumable_uploads = true,
-            .supports_server_side_copy = true,
-            .supports_recursive_list = false,
-            .needs_total_size_upfront = false,
-            .upload_chunk_alignment = 320 * 1024, // 320 KiB required
-            .min_upload_chunk = 320 * 1024,
-            .max_upload_chunk = 60 * 1024 * 1024 // 60 MiB
-        };
+        ProviderCapabilities caps;
+        caps.supports_range_reads = true;
+        caps.supports_resumable_uploads = true;
+        caps.supports_server_side_copy = true;
+        caps.supports_recursive_list = false;
+        caps.needs_total_size_upfront = false;
+        caps.upload_chunk_alignment = 320 * 1024; // 320 KiB required
+        caps.min_upload_chunk = 320 * 1024;
+        caps.max_upload_chunk = 60 * 1024 * 1024; // 60 MiB
+        return caps;
     }
 
     bool ParseUrl(const std::string& url, std::string& out_root, std::string& out_path,
