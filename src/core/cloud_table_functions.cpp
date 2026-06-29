@@ -219,7 +219,7 @@ static unique_ptr<GlobalTableFunctionState> LsInit(ClientContext&, TableFunction
     return std::move(state);
 }
 
-static void LsScan(ClientContext&, TableFunctionInput& data_p, DataChunk& output) {
+static void LsScan(ClientContext& context, TableFunctionInput& data_p, DataChunk& output) {
     auto& bind = data_p.bind_data->Cast<LsBindData>();
     auto& state = data_p.global_state->Cast<LsScanState>();
 
