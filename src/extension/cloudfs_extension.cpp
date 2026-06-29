@@ -211,9 +211,9 @@ static void LoadInternal(ExtensionLoader& loader) {
         "cloudfs_version", {}, LogicalType::VARCHAR,
         [](DataChunk&, ExpressionState&, Vector& r) { r.SetValue(0, Value("cloudfs 0.1.0")); }));
 
-    // providers() — no prefix, no collision
+    // cloudfs_providers()
     {
-        ScalarFunctionSet s("providers");
+        ScalarFunctionSet s("cloudfs_providers");
         s.AddFunction(
             ScalarFunction({}, LogicalType::VARCHAR, [](DataChunk&, ExpressionState&, Vector& r) {
                 if (!g_cfs) {
@@ -228,14 +228,14 @@ static void LoadInternal(ExtensionLoader& loader) {
         loader.RegisterFunction(s);
     }
 
-    // clear_cache() and clear_cache(scheme) — no prefix, no collision
+    // cloudfs_clear_cache() and cloudfs_clear_cache(scheme)
     {
-        ScalarFunctionSet s("clear_cache");
+        ScalarFunctionSet s("cloudfs_clear_cache");
         s.AddFunction(
             ScalarFunction({}, LogicalType::VARCHAR, [](DataChunk&, ExpressionState&, Vector& r) {
                 if (g_cfs)
                     g_cfs->GetCache().ClearAll();
-                r.SetValue(0, Value("OK"));
+                r.SetValue(0, Value("OK: all caches cleared"));
             }));
         s.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,
                                      [](DataChunk& args, ExpressionState&, Vector& r) {
@@ -246,7 +246,7 @@ static void LoadInternal(ExtensionLoader& loader) {
                                              else
                                                  g_cfs->GetCache().ClearScheme(sc);
                                          }
-                                         r.SetValue(0, Value("OK"));
+                                         r.SetValue(0, Value("OK: cache cleared for '" + sc + "'"));
                                      }));
         loader.RegisterFunction(s);
     }
