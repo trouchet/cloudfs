@@ -91,4 +91,28 @@ bool SharePointDeviceCodeAuth::RefreshToken(std::string& err) {
     return true;
 }
 
+// ─── SharePointClientCredentialsAuth ───────────────────────────────────────────────────────────
+bool SharePointClientCredentialsAuth::AcquireToken(std::string& err) {
+    std::string url =
+        "https://login.microsoftonline.com/" + tenant_id_ + "/oauth2/v2.0/token";
+    std::string body = "client_id=" + client_id_ + "&client_secret=" + client_secret_ +
+                       "&scope=" + scope_ + "&grant_type=client_credentials";
+    std::string resp = PostForm(url, body, err);
+    if (resp.empty())
+        return false;
+    std::string ec = JsonGet(resp, "error");
+    if (!ec.empty()) {
+        err = "sharepoint client_credentials: " + ec + " — " + JsonGet(resp, "error_description");
+        return false;
+    }
+    std::string at = JsonGet(resp, "access_token");
+    if (at.empty()) {
+        err = "sharepoint client_credentials: no access_token in response";
+        return false;
+    }
+    // Client credentials tokens have no refresh token; store empty string
+    token_.SetFromResponse(at, "", std::max(JsonGetInt(resp, "expires_in"), 3600));
+    return true;
+}
+
 } // namespace duckdb
