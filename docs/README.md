@@ -31,6 +31,12 @@ Welcome to CloudFS documentation! Choose your path:
 - **[Detailed Guide](CONTRIBUTING_PT.md)** - Full contribution guide (Portuguese)
 - **[Quick Reference](SUBMIT_PATCH_QUICK_REFERENCE.md)** - Commands & formats cheat sheet
 
+### 🔐 Authentication & Enterprise
+
+- **[Investigation Summary](INVESTIGATION_SUMMARY.md)** - Auth audit results & provider status ⭐ NEW
+- **[Authentication Audit](AUTHENTICATION_AUDIT.md)** - Detailed provider analysis
+- **[Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)** - Fix plan for server-to-server auth
+
 ## 🛠️ Helper Scripts
 
 Located in `scripts/` folder at project root:
@@ -52,6 +58,10 @@ Choose your path:
     ├─→ SETUP_GUIDE.md (detailed setup)
     │       ↓
     │   QUICKSTART_SHAREPOINT.md (provider examples)
+    │       ↓
+    │   INVESTIGATION_SUMMARY.md (if need CI/CD/automation)
+    │       ↓
+    │   AUTHENTICATION_AUDIT.md (detailed provider analysis)
     │
     ├─→ CONTRIBUTING_PT.md (want to contribute?)
     │       ↓
@@ -62,6 +72,8 @@ Choose your path:
     └─→ DEVELOPMENT.md (developing CloudFS)
             ↓
         COMMIT_PLAN.md (commit guidelines)
+            ↓
+        IMPLEMENTATION_ROADMAP.md (if fixing auth)
             ↓
         adding_a_provider.md (add new provider)
 ```
@@ -80,6 +92,8 @@ Choose your path:
 | Develop a new feature | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | Add a new cloud provider | [adding_a_provider.md](adding_a_provider.md) |
 | Understand commits | [COMMIT_PLAN.md](COMMIT_PLAN.md) |
+| Use CloudFS in automation/CI-CD | [INVESTIGATION_SUMMARY.md](INVESTIGATION_SUMMARY.md) |
+| Implement server-to-server auth | [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) |
 
 ## 🚀 Quick Links
 
