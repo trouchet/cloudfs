@@ -146,6 +146,14 @@ class ICloudBackend {
         return false;
     }
 
+    // Optional server-side move/rename (avoids delete+re-upload for large files).
+    virtual bool MoveItem(const std::string& root, const std::string& src_item_id,
+                          const std::string& dst_parent_id, const std::string& dst_name,
+                          const std::string& access_token, std::string& err) {
+        err = Name() + ": server-side move not supported";
+        return false;
+    }
+
     // ── Root resolution ───────────────────────────────────────────────────────
 
     // Resolve the root string (parsed by ParseUrl) to an internal drive/bucket ID.

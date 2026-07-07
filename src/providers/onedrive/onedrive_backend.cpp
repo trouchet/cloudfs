@@ -163,4 +163,34 @@ bool OneDriveBackend::CreateFolder(const std::string& root, const std::string& p
     return true;
 }
 
+bool OneDriveBackend::CopyItem(const std::string& root, const std::string& src_id,
+                               const std::string& dst_parent_id, const std::string& dst_name,
+                               const std::string& tok, std::string& err) {
+    std::string url =
+        "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_id + "/copy";
+    std::string body =
+        "{\"parentReference\":{\"id\":\"" + dst_parent_id + "\"},\"name\":\"" + dst_name + "\"}";
+    auto resp = http_.Post(url, tok, body);
+    if (resp.status != 202) {
+        err = "copy failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
+bool OneDriveBackend::MoveItem(const std::string& root, const std::string& src_id,
+                               const std::string& dst_parent_id, const std::string& dst_name,
+                               const std::string& tok, std::string& err) {
+    std::string url =
+        "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_id;
+    std::string body =
+        "{\"name\":\"" + dst_name + "\",\"parentReference\":{\"id\":\"" + dst_parent_id + "\"}}";
+    auto resp = http_.Patch(url, tok, body);
+    if (!resp.ok()) {
+        err = "move failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 } // namespace duckdb

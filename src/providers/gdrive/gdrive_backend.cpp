@@ -220,4 +220,40 @@ bool GDriveBackend::CopyItem(const std::string&, const std::string& src_id,
     return true;
 }
 
+bool GDriveBackend::MoveItem(const std::string&, const std::string& src_id,
+                             const std::string& dst_parent_id, const std::string& dst_name,
+                             const std::string& tok, std::string& err) {
+    // Fetch current parents so we can pass removeParents (avoids duplicates in multi-parent drives)
+    std::string meta_url =
+        kApiBase + "/files/" + src_id + "?fields=parents&supportsAllDrives=true";
+    auto meta_resp = http_.Get(meta_url, tok);
+    if (!meta_resp.ok()) {
+        err = "move: failed to fetch file metadata (" + std::to_string(meta_resp.status) + ")";
+        return false;
+    }
+    // Extract first parent ID from JSON array ["id1","id2",...]
+    std::string old_parent;
+    auto parents_pos = meta_resp.body.find("\"parents\"");
+    if (parents_pos != std::string::npos) {
+        auto arr_start = meta_resp.body.find('[', parents_pos);
+        auto first_q = meta_resp.body.find('"', arr_start + 1);
+        auto second_q = meta_resp.body.find('"', first_q + 1);
+        if (first_q != std::string::npos && second_q != std::string::npos)
+            old_parent = meta_resp.body.substr(first_q + 1, second_q - first_q - 1);
+    }
+
+    std::string url = kApiBase + "/files/" + src_id + "?supportsAllDrives=true";
+    if (!old_parent.empty())
+        url += "&removeParents=" + old_parent;
+    url += "&addParents=" + dst_parent_id;
+
+    std::string body = "{\"name\":\"" + dst_name + "\"}";
+    auto resp = http_.Patch(url, tok, body);
+    if (!resp.ok()) {
+        err = "move failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 } // namespace duckdb

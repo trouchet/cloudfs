@@ -278,4 +278,22 @@ bool DropboxBackend::CopyItem(const std::string&, const std::string& src_id,
     return true;
 }
 
+bool DropboxBackend::MoveItem(const std::string&, const std::string& src_id,
+                              const std::string& dst_parent_id, const std::string& dst_name,
+                              const std::string& tok, std::string& err) {
+    HttpRequest req;
+    req.method = "POST";
+    req.SetBearerAuth(tok);
+    req.headers["Content-Type"] = "application/json";
+    req.url = std::string(kApiBase) + "/files/move_v2";
+    req.body =
+        "{\"from_path\":\"" + src_id + "\",\"to_path\":\"" + dst_parent_id + "/" + dst_name + "\"}";
+    auto resp = http_.Execute(req);
+    if (!resp.ok()) {
+        err = "move failed " + std::to_string(resp.status);
+        return false;
+    }
+    return true;
+}
+
 } // namespace duckdb

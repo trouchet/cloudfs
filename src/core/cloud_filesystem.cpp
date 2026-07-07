@@ -442,8 +442,53 @@ void CloudFileSystem::RemoveFile(const string& path, optional_ptr<FileOpener>) {
     cache_.InvalidateItem(b.Scheme(), path);
 }
 
-void CloudFileSystem::MoveFile(const string&, const string&, optional_ptr<FileOpener>) {
-    Throw("cloudfs: MoveFile not yet implemented");
+void CloudFileSystem::MoveFile(const string& src_url, const string& dst_url,
+                               optional_ptr<FileOpener>) {
+    auto& b = BackendFor(src_url);
+    if (!b.CanHandle(dst_url))
+        Throw("cloudfs: move across providers is not supported");
+
+    std::string src_raw, src_path, dst_raw, dst_path, err;
+    Throw(!b.ParseUrl(src_url, src_raw, src_path, err) ? err : "");
+    Throw(!b.ParseUrl(dst_url, dst_raw, dst_path, err) ? err : "");
+    if (src_raw != dst_raw)
+        Throw("cloudfs: cross-root move not supported; source and destination must share the same "
+              "storage root");
+
+    // Resolve root (with cache)
+    std::string root_id;
+    if (!cache_.GetRootId(b.Scheme(), src_raw, root_id)) {
+        std::string tok;
+        Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+        Throw(!b.ResolveRoot(src_raw, tok, root_id, err) ? err : "");
+        cache_.PutRootId(b.Scheme(), src_raw, root_id);
+    }
+    std::string tok;
+    Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+
+    // Stat the source item
+    CloudItem src_item;
+    Throw(!b.Stat(root_id, src_path, tok, src_item, err) ? "source not found: " + err : "");
+
+    // Decompose destination into parent path + filename
+    auto last_slash = dst_path.rfind('/');
+    std::string dst_name =
+        (last_slash == std::string::npos) ? dst_path : dst_path.substr(last_slash + 1);
+    std::string dst_parent_path =
+        (last_slash == std::string::npos || last_slash == 0) ? "/" : dst_path.substr(0, last_slash);
+
+    // Stat the destination parent folder
+    CloudItem dst_parent;
+    Throw(!b.Stat(root_id, dst_parent_path, tok, dst_parent, err)
+              ? "destination parent not found: " + err
+              : "");
+
+    // Perform server-side move
+    Throw(!b.MoveItem(root_id, src_item.id, dst_parent.id, dst_name, tok, err) ? err : "");
+
+    // Invalidate affected cache entries
+    cache_.InvalidateItem(b.Scheme(), src_url);
+    cache_.InvalidatePrefix(b.Scheme(), b.Scheme() + "://" + src_raw + dst_parent_path);
 }
 
 bool CloudFileSystem::ListFiles(const string& dir,

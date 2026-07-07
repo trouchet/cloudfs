@@ -94,6 +94,10 @@ class DropboxBackend : public ICloudBackend {
                   const std::string& dst_parent_id, const std::string& dst_name,
                   const std::string& token, std::string& err) override;
 
+    bool MoveItem(const std::string& root, const std::string& src_id,
+                  const std::string& dst_parent_id, const std::string& dst_name,
+                  const std::string& token, std::string& err) override;
+
   private:
     CloudItem ParseMetadata(const std::string& json) const;
 

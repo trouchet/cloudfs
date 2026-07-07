@@ -95,6 +95,10 @@ class VFSBackend : public ICloudBackend {
                       const std::string& name, const std::string& token, CloudItem& out,
                       std::string& err) override;
 
+    bool MoveItem(const std::string& root, const std::string& src_id,
+                  const std::string& dst_parent_id, const std::string& dst_name,
+                  const std::string& token, std::string& err) override;
+
     // Check agent health — returns version string or error
     bool Ping(const std::string& root, const std::string& token, std::string& out_version,
               std::string& err);

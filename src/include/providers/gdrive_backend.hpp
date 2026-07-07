@@ -88,6 +88,10 @@ class GDriveBackend : public ICloudBackend {
                   const std::string& dst_parent_id, const std::string& dst_name,
                   const std::string& token, std::string& err) override;
 
+    bool MoveItem(const std::string& root, const std::string& src_id,
+                  const std::string& dst_parent_id, const std::string& dst_name,
+                  const std::string& token, std::string& err) override;
+
   private:
     // Path resolution: Google Drive has no native path API.
     // We walk the tree: root → child named X → child named Y → …
