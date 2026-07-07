@@ -94,10 +94,41 @@ SELECT * FROM du('odfs://Projects/');
 | `sftp://`  | SFTP         | `sftp://user@server/path/to/file.parquet`     |
 | `vfs://`   | VFS Agent    | `vfs://localhost:19876/data/file.csv`         |
 
+## � Project Structure
+
+```
+cloudfs/
+├── scripts/                          # Utility scripts
+│   ├── compile_for_current_duckdb.sh # Auto-compile for your DuckDB version
+│   ├── extract_from_aca.sh          # Extract SharePoint credentials from Azure
+│   ├── setup_secrets.sh              # Interactive secret management
+│   ├── duckdb-cloudfs.sh             # Wrapper to run DuckDB with -unsigned
+│   └── submit_patch.sh               # Guide for submitting patches
+│
+├── docs/                             # Documentation
+│   ├── START_HERE.md                 # Quick start guide (START HERE!) 🚀
+│   ├── SETUP_GUIDE.md                # Comprehensive setup instructions
+│   ├── QUICKSTART_SHAREPOINT.md      # SharePoint integration examples
+│   ├── CONTRIBUTING_PT.md            # How to contribute (Portuguese)
+│   ├── COMO_SUBMETER_PATCHES.md      # How to submit patches (Portuguese)
+│   ├── SUBMIT_PATCH_QUICK_REFERENCE.md # Quick reference for patches
+│   └── DEVELOPMENT.md                # Development workflow
+│
+├── src/                              # Source code (C++)
+├── test/                             # Tests
+└── README.md                         # This file
+```
+
 ## 📖 Documentation
 
+**First time?** Start here → [docs/START_HERE.md](docs/START_HERE.md)
+
+- **[Setup Guide](docs/SETUP_GUIDE.md)** - Comprehensive setup instructions
 - **[Development Guide](docs/DEVELOPMENT.md)** - Contributing and development
   workflow
+- **[SharePoint Quickstart](docs/QUICKSTART_SHAREPOINT.md)** - SharePoint integration examples
+- **[How to Contribute](docs/CONTRIBUTING_PT.md)** - Contributing guidelines (Portuguese)
+- **[Submit Patches](docs/COMO_SUBMETER_PATCHES.md)** - Quick guide to submitting patches (Portuguese)
 - **[Build Quickstart](docs/BUILD_QUICKSTART.md)** - Detailed build instructions
 - **[Commit Guidelines](docs/COMMIT_PLAN.md)** - Git commit conventions
 - **[Adding a Provider](docs/adding_a_provider.md)** - How to add new cloud

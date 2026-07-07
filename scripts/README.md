@@ -333,11 +333,83 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
+## 🆕 Utility Scripts (New)
+
+### compile_for_current_duckdb.sh
+
+**Purpose**: Auto-compile CloudFS for your DuckDB version  
+**Usage**: `./scripts/compile_for_current_duckdb.sh`  
+**When to use**: First setup, after updating DuckDB  
+**Features**:
+- Detects your DuckDB version automatically
+- Checks out matching branch
+- Cleans and recompiles
+- Installs to `~/.duckdb/extensions/`
+
+______________________________________________________________________
+
+### extract_from_aca.sh
+
+**Purpose**: Extract SharePoint credentials from Azure Container Apps  
+**Usage**: `./scripts/extract_from_aca.sh`  
+**When to use**: You have credentials in Azure ACA  
+**Output**: Saves to `~/.env.sharepoint`  
+**Requires**: `az` CLI, `jq`
+
+______________________________________________________________________
+
+### setup_secrets.sh
+
+**Purpose**: Interactive menu for credential setup  
+**Usage**: `./scripts/setup_secrets.sh`  
+**When to use**: First setup, adding credentials  
+**Options**:
+- [1] Local .env file
+- [2] Azure Key Vault
+- [3] GitHub Secrets  
+- [4] Manual entry
+
+______________________________________________________________________
+
+### duckdb-cloudfs.sh
+
+**Purpose**: Wrapper to run DuckDB with CloudFS pre-loaded  
+**Usage**: `./scripts/duckdb-cloudfs.sh` or `duckdb-cloudfs` (if symlinked)  
+**When to use**: Every time you want to use CloudFS  
+**Features**:
+- Handles `-unsigned` flag automatically
+- Pre-loads cloudfs extension
+- Fully compatible with all DuckDB commands
+
+**Setup symlink**:
+```bash
+ln -sf ~/github/cloudfs/scripts/duckdb-cloudfs.sh ~/bin/duckdb-cloudfs
+```
+
+______________________________________________________________________
+
+### submit_patch.sh
+
+**Purpose**: Interactive guide for submitting patches  
+**Usage**: `./scripts/submit_patch.sh`  
+**When to use**: Contributing code to CloudFS  
+**What it does**:
+- ✅ Validates prerequisites
+- ✅ Sets up upstream remote
+- ✅ Creates feature branch
+- ✅ Runs lint & build checks
+- ✅ Guides commit format
+- ✅ Shows PR creation steps
+
+______________________________________________________________________
+
 ## 📚 Related Documentation
 
 - **[Development Guide](../docs/DEVELOPMENT.md)** - Full development workflow
 - **[Build Quickstart](../docs/BUILD_QUICKSTART.md)** - Build instructions
 - **[Commit Plan](../docs/COMMIT_PLAN.md)** - Commit strategy
+- **[Quick Start](../docs/START_HERE.md)** - Get started in 2 minutes
+- **[Contributing Guide](../docs/CONTRIBUTING_PT.md)** - How to contribute
 
 ______________________________________________________________________
 

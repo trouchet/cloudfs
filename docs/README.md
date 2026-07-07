@@ -1,53 +1,91 @@
 # 📚 CloudFS Documentation
 
-Welcome to the CloudFS documentation! This directory contains all guides and
-documentation for developing and using the CloudFS DuckDB extension.
+Welcome to CloudFS documentation! Choose your path:
 
-## 📖 Table of Contents
+## 🆕 Getting Started (START HERE!)
 
-### Getting Started
+**First time using CloudFS?**
+1. Read [START_HERE.md](START_HERE.md) - Quick start in 2 minutes ⭐
+2. Then [SETUP_GUIDE.md](SETUP_GUIDE.md) - Comprehensive setup
 
-- **[Main README](../README.md)** - Project overview and quick start
-- **[Build Quickstart](BUILD_QUICKSTART.md)** - Step-by-step build instructions
-  and troubleshooting
+## 📖 Documentation by Use Case
 
-### Development
+### Using CloudFS
 
-- **[Development Guide](DEVELOPMENT.md)** - Complete development workflow, code
-  style, and tools
-- **[Commit Guidelines](COMMIT_PLAN.md)** - Git commit strategy and conventional
-  commits
-- **[Commitlint Setup](COMMITLINT_SETUP.md)** - Pre-commit hooks and validation
-  setup
+- **[Quick Start](START_HERE.md)** - Get up and running in 2 minutes
+- **[Setup Guide](SETUP_GUIDE.md)** - Complete setup walkthrough
+- **[SharePoint Integration](QUICKSTART_SHAREPOINT.md)** - SharePoint provider examples
+- **[Build Instructions](BUILD_QUICKSTART.md)** - Build and troubleshoot
 
-### Architecture & Extension
+### Developing & Contributing
 
-- **[Adding a Provider](adding_a_provider.md)** - How to implement a new cloud
-  storage provider
-- **[Task Status](TASK1_STATUS.md)** - Current task status and implementation
-  details
+- **[Development Guide](DEVELOPMENT.md)** - Development workflow and code style
+- **[How to Contribute](CONTRIBUTING_PT.md)** - Contributing guide (Portuguese)
+- **[Commit Guidelines](COMMIT_PLAN.md)** - Git workflow and conventional commits
+- **[Commitlint Setup](COMMITLINT_SETUP.md)** - Pre-commit hooks configuration
+- **[Adding a Provider](adding_a_provider.md)** - Implement new cloud storage provider
 
-### Project Management
+### Submitting Patches
 
-- **[Agent Handover](../AGENT_HANDOVER.md)** - Project roadmap, tasks, and next
-  steps
+- **[Quick Overview](COMO_SUBMETER_PATCHES.md)** - 30-second overview (Portuguese) ⭐
+- **[Detailed Guide](CONTRIBUTING_PT.md)** - Full contribution guide (Portuguese)
+- **[Quick Reference](SUBMIT_PATCH_QUICK_REFERENCE.md)** - Commands & formats cheat sheet
 
-______________________________________________________________________
+## 🛠️ Helper Scripts
+
+Located in `scripts/` folder at project root:
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| **Compile** | `scripts/compile_for_current_duckdb.sh` | Auto-compile for your DuckDB version |
+| **Setup** | `scripts/setup_secrets.sh` | Interactive secret/credential setup |
+| **Extract** | `scripts/extract_from_aca.sh` | Extract SharePoint credentials from Azure ACA |
+| **Run** | `scripts/duckdb-cloudfs.sh` | Wrapper to run DuckDB with -unsigned |
+| **Patch** | `scripts/submit_patch.sh` | Guide for submitting patches |
+
+## 📚 Documentation Navigation
+
+```
+START_HERE.md
+    ↓
+Choose your path:
+    ├─→ SETUP_GUIDE.md (detailed setup)
+    │       ↓
+    │   QUICKSTART_SHAREPOINT.md (provider examples)
+    │
+    ├─→ CONTRIBUTING_PT.md (want to contribute?)
+    │       ↓
+    │   COMO_SUBMETER_PATCHES.md (submit a patch)
+    │       ↓
+    │   SUBMIT_PATCH_QUICK_REFERENCE.md (commands)
+    │
+    └─→ DEVELOPMENT.md (developing CloudFS)
+            ↓
+        COMMIT_PLAN.md (commit guidelines)
+            ↓
+        adding_a_provider.md (add new provider)
+```
+
+## ✅ Common Tasks
+
+### I want to...
+
+| Task | Read |
+|------|------|
+| Get started quickly | [START_HERE.md](START_HERE.md) |
+| Set up SharePoint access | [SETUP_GUIDE.md](SETUP_GUIDE.md) + [QUICKSTART_SHAREPOINT.md](QUICKSTART_SHAREPOINT.md) |
+| Build from source | [BUILD_QUICKSTART.md](BUILD_QUICKSTART.md) |
+| Contribute code | [CONTRIBUTING_PT.md](CONTRIBUTING_PT.md) |
+| Submit a patch/PR | [COMO_SUBMETER_PATCHES.md](COMO_SUBMETER_PATCHES.md) |
+| Develop a new feature | [DEVELOPMENT.md](DEVELOPMENT.md) |
+| Add a new cloud provider | [adding_a_provider.md](adding_a_provider.md) |
+| Understand commits | [COMMIT_PLAN.md](COMMIT_PLAN.md) |
 
 ## 🚀 Quick Links
 
-### For New Contributors
-
-1. Read the [main README](../README.md) for project overview
-1. Follow [Build Quickstart](BUILD_QUICKSTART.md) to compile
-1. Review [Development Guide](DEVELOPMENT.md) for workflow
-1. Check [Commit Guidelines](COMMIT_PLAN.md) before committing
-
-### For Users
-
-- [Main README](../README.md) - Usage examples and supported providers
-
-### For Maintainers
+- **[Project Main README](../README.md)** - Project overview
+- **[GitHub Repository](https://github.com/trouchet/cloudfs)** - Source code
+- **[DuckDB Docs](https://duckdb.org/docs/)** - DuckDB documentation
 
 - [Agent Handover](../AGENT_HANDOVER.md) - Roadmap and tasks
 - [Task Status](TASK1_STATUS.md) - Current progress
