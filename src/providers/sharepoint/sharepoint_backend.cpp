@@ -229,4 +229,18 @@ bool SharePointBackend::CopyItem(const std::string& root, const std::string& src
     return true;
 }
 
+bool SharePointBackend::AbortUpload(const CloudUploadSession& session, const std::string& tok,
+                                    std::string& err) {
+    if (session.upload_url.empty())
+        return true;
+    // Graph API upload sessions are cancelled by DELETE on the uploadUrl
+    auto resp = http_.Delete(session.upload_url, tok);
+    // 204 = cancelled, 404 = already expired/completed — both are fine
+    if (resp.status != 204 && resp.status != 404) {
+        err = "abort upload failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 } // namespace duckdb

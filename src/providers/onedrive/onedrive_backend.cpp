@@ -163,4 +163,16 @@ bool OneDriveBackend::CreateFolder(const std::string& root, const std::string& p
     return true;
 }
 
+bool OneDriveBackend::AbortUpload(const CloudUploadSession& session, const std::string& tok,
+                                  std::string& err) {
+    if (session.upload_url.empty())
+        return true;
+    auto resp = http_.Delete(session.upload_url, tok);
+    if (resp.status != 204 && resp.status != 404) {
+        err = "abort upload failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 } // namespace duckdb

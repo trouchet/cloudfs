@@ -74,6 +74,9 @@ class OneDriveBackend : public ICloudBackend {
                       const std::string& name, const std::string& token, CloudItem& out,
                       std::string& err) override;
 
+    bool AbortUpload(const CloudUploadSession& session, const std::string& token,
+                     std::string& err) override;
+
   private:
     // Builds the Graph API base URL for a given root
     // root="me"          → https://graph.microsoft.com/v1.0/me/drive

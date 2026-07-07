@@ -396,4 +396,17 @@ bool SFTPBackend::CreateFolder(const std::string& root, const std::string& paren
     return true;
 }
 
+bool SFTPBackend::AbortUpload(const CloudUploadSession& session, const std::string& token,
+                              std::string& err) {
+    // upload_url contains the remote file path; item_id is used as root (user@host:port)
+    if (session.upload_url.empty())
+        return true;
+    const std::string& root = session.item_id.empty() ? "" : session.item_id;
+    auto& conn = GetConnection(root, token, err);
+    if (!conn.IsValid())
+        return true; // best effort — connection unavailable
+    libssh2_sftp_unlink(conn.sftp, session.upload_url.c_str()); // delete partial file
+    return true; // non-fatal if unlink fails (file may not exist yet)
+}
+
 } // namespace duckdb

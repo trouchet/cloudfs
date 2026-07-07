@@ -100,6 +100,9 @@ class SFTPBackend : public ICloudBackend {
                       const std::string& name, const std::string& token, CloudItem& out,
                       std::string& err) override;
 
+    bool AbortUpload(const CloudUploadSession& session, const std::string& token,
+                     std::string& err) override;
+
   private:
     // Get or create an SSH+SFTP connection for a given root ("user@host:port")
     SSHConnection& GetConnection(const std::string& root,

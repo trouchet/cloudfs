@@ -146,6 +146,21 @@ bool VFSBackend::CreateFolder(const std::string& root, const std::string& parent
     return true;
 }
 
+bool VFSBackend::AbortUpload(const CloudUploadSession& session, const std::string& token,
+                             std::string& err) {
+    if (session.item_id.empty() || session.upload_url.empty())
+        return true;
+    // upload_url = agent root, item_id = session_id
+    std::string url =
+        session.upload_url + "/v1/upload/abort?" + UrlUtil::BuildQuery({{"session", session.item_id}});
+    auto resp = http_.Delete(url, token);
+    if (resp.status != 204 && resp.status != 200 && resp.status != 404) {
+        err = "abort upload failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 bool VFSBackend::Ping(const std::string& root, const std::string& token, std::string& out_version,
                       std::string& err) {
     auto resp = http_.Get(root + "/v1/ping", token);
