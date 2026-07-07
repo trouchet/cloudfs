@@ -409,4 +409,78 @@ bool SFTPBackend::AbortUpload(const CloudUploadSession& session, const std::stri
     return true; // non-fatal if unlink fails (file may not exist yet)
 }
 
+bool SFTPBackend::CopyItem(const std::string& root, const std::string& src_id,
+                           const std::string& dst_parent_id, const std::string& dst_name,
+                           const std::string& token, std::string& err) {
+    // SFTP has no server-side copy command; transfer bytes through the client.
+    auto& conn = GetConnection(root, token, err);
+    if (!conn.IsValid())
+        return false;
+    std::string dst_path = dst_parent_id + "/" + dst_name;
+    LIBSSH2_SFTP_HANDLE* rfh =
+        libssh2_sftp_open(conn.sftp, src_id.c_str(), LIBSSH2_FXF_READ, 0);
+    if (!rfh) {
+        err = "sftp copy: cannot open source: " + src_id;
+        return false;
+    }
+    unsigned long wflags = LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_TRUNC;
+    LIBSSH2_SFTP_HANDLE* wfh =
+        libssh2_sftp_open(conn.sftp, dst_path.c_str(), wflags, 0644);
+    if (!wfh) {
+        libssh2_sftp_close(rfh);
+        err = "sftp copy: cannot create destination: " + dst_path;
+        return false;
+    }
+    char buf[256 * 1024]; // 256 KiB transfer chunks
+    bool ok = true;
+    while (ok) {
+        int n = libssh2_sftp_read(rfh, buf, sizeof(buf));
+        if (n == 0)
+            break; // EOF
+        if (n < 0) {
+            err = "sftp copy: read error";
+            ok = false;
+            break;
+        }
+        int64_t written = 0;
+        while (written < n) {
+            int w = libssh2_sftp_write(wfh, buf + written, (size_t)(n - written));
+            if (w < 0) {
+                err = "sftp copy: write error";
+                ok = false;
+                break;
+            }
+            written += w;
+        }
+    }
+    libssh2_sftp_close(rfh);
+    libssh2_sftp_close(wfh);
+    if (!ok)
+        libssh2_sftp_unlink(conn.sftp, dst_path.c_str()); // clean up partial write
+    return ok;
+}
+
+bool SFTPBackend::ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                                      const std::string& token,
+                                      const std::function<void(const CloudItem&)>& cb,
+                                      std::string& err) {
+    // SFTP has no recursive-list command; iterate with BFS using ListFolder.
+    std::vector<std::string> queue;
+    queue.push_back(folder_id);
+    for (size_t i = 0; i < queue.size(); ++i) {
+        std::string cursor;
+        do {
+            if (!ListFolder(root, queue[i], token,
+                            [&](const CloudItem& item) {
+                                cb(item);
+                                if (item.is_folder)
+                                    queue.push_back(item.id);
+                            },
+                            cursor, err))
+                return false;
+        } while (!cursor.empty());
+    }
+    return true;
+}
+
 } // namespace duckdb

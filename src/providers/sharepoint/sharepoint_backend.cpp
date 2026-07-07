@@ -229,6 +229,30 @@ bool SharePointBackend::CopyItem(const std::string& root, const std::string& src
     return true;
 }
 
+bool SharePointBackend::ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                                            const std::string& tok,
+                                            const std::function<void(const CloudItem&)>& cb,
+                                            std::string& err) {
+    // Microsoft Graph has no recursive-list API; use BFS so callers see parent
+    // items before children, which is friendlier for progressive rendering.
+    std::vector<std::string> queue;
+    queue.push_back(folder_id);
+    for (size_t i = 0; i < queue.size(); ++i) {
+        std::string cursor;
+        do {
+            if (!ListFolder(root, queue[i], tok,
+                            [&](const CloudItem& item) {
+                                cb(item);
+                                if (item.is_folder)
+                                    queue.push_back(item.id);
+                            },
+                            cursor, err))
+                return false;
+        } while (!cursor.empty());
+    }
+    return true;
+}
+
 bool SharePointBackend::AbortUpload(const CloudUploadSession& session, const std::string& tok,
                                     std::string& err) {
     if (session.upload_url.empty())

@@ -51,7 +51,7 @@ class VFSBackend : public ICloudBackend {
         caps.supports_range_reads = true;
         caps.supports_resumable_uploads = true;
         caps.supports_server_side_copy = false;
-        caps.supports_recursive_list = false;
+        caps.supports_recursive_list = true; // via ?recursive=true agent endpoint
         caps.needs_total_size_upfront = false;
         caps.upload_chunk_alignment = 1; // agent accepts any chunk size
         caps.min_upload_chunk = 1;
@@ -94,6 +94,12 @@ class VFSBackend : public ICloudBackend {
     bool CreateFolder(const std::string& root, const std::string& parent_id,
                       const std::string& name, const std::string& token, CloudItem& out,
                       std::string& err) override;
+
+    // VFS agent supports ?recursive=true for a single deep-listing HTTP call.
+    bool ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                             const std::string& token,
+                             const std::function<void(const CloudItem&)>& cb,
+                             std::string& err) override;
 
     bool AbortUpload(const CloudUploadSession& session, const std::string& token,
                      std::string& err) override;
