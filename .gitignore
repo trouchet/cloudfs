@@ -53,9 +53,6 @@ htmlcov/
 # Pre-commit
 .pre-commit-config.yaml.bak
 
-# Secrets
-.secrets.baseline
-
 # Local Docker build helpers
 docker_env.txt
 ccache_dir/
