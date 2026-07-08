@@ -87,8 +87,8 @@ repos:
       - id: mdformat
         args: ['--wrap', '80']
         additional_dependencies:
-          - mdformat-gfm
-          - mdformat-tables
+          - mdformat-gfm==0.4.1
+          - mdformat-tables==0.4.0
 
   # ============================================================================
   # Commit Message Validation (commitlint)
