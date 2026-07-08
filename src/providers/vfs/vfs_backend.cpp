@@ -146,6 +146,19 @@ bool VFSBackend::CreateFolder(const std::string& root, const std::string& parent
     return true;
 }
 
+bool VFSBackend::MoveItem(const std::string& root, const CloudItem& src_item,
+                          const CloudItem& dst_parent, const std::string& dst_name,
+                          const std::string& token, std::string& err) {
+    std::string dst_path = dst_parent.id + "/" + dst_name;
+    std::string body = JsonUtil::MakeObject({{"from", src_item.id}, {"to", dst_path}});
+    auto resp = http_.Post(root + "/v1/move", token, body);
+    if (!resp.ok()) {
+        err = "move failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 bool VFSBackend::ListFolderRecursive(const std::string& root, const std::string& folder_id,
                                      const std::string& token,
                                      const std::function<void(const CloudItem&)>& cb,

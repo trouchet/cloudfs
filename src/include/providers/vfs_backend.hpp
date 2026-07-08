@@ -95,6 +95,9 @@ class VFSBackend : public ICloudBackend {
                       const std::string& name, const std::string& token, CloudItem& out,
                       std::string& err) override;
 
+    bool MoveItem(const std::string& root, const CloudItem& src_item, const CloudItem& dst_parent,
+                  const std::string& dst_name, const std::string& token, std::string& err) override;
+
     // VFS agent supports ?recursive=true for a single deep-listing HTTP call.
     bool ListFolderRecursive(const std::string& root, const std::string& folder_id,
                              const std::string& token,
