@@ -99,7 +99,7 @@ class GDriveBackend : public ICloudBackend {
                   const std::string& dst_name, const std::string& token, std::string& err) override;
 
     bool AbortUpload(const CloudUploadSession& session, const std::string& token,
-                    std::string& err) override;
+                     std::string& err) override;
 
   private:
     // Path resolution: Google Drive has no native path API.
