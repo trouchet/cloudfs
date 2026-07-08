@@ -2,13 +2,15 @@
 
 ## 📌 Overview
 
-This document outlines the systematic fix for CloudFS authentication gaps across all providers.
+This document outlines the systematic fix for CloudFS authentication gaps across
+all providers.
 
-**Goal**: Enable server-to-server authentication across all major cloud providers.
+**Goal**: Enable server-to-server authentication across all major cloud
+providers.
 
 **Timeline**: 3 development sessions
 
----
+______________________________________________________________________
 
 ## 🎯 Priority Tier 1: Critical Blockers (Session 1-2)
 
@@ -19,12 +21,14 @@ This document outlines the systematic fix for CloudFS authentication gaps across
 **What's Missing**: C++ implementation of Client Credentials grant
 
 **Required Changes**:
+
 1. Add parameter parsing for `CLIENT_SECRET` in SECRET creation
-2. Implement `SharePointClientCredentialsAuth` class
-3. Token caching + refresh logic
-4. Error handling
+1. Implement `SharePointClientCredentialsAuth` class
+1. Token caching + refresh logic
+1. Error handling
 
 **Files to Modify**:
+
 - `src/providers/sharepoint/sharepoint_auth.cpp` - Main implementation
 - `src/providers/sharepoint/sharepoint_auth.hpp` - Add new class
 - Tests + documentation
@@ -32,6 +36,7 @@ This document outlines the systematic fix for CloudFS authentication gaps across
 **Estimated Effort**: 60-90 minutes
 
 **Testing**:
+
 ```bash
 export CLOUDFS_SHAREPOINT_CLIENT_ID="<your-client-id>"
 export CLOUDFS_SHAREPOINT_CLIENT_SECRET="<your-client-secret>"
@@ -45,13 +50,14 @@ EOF
 ```
 
 **Merge Checklist**:
+
 - [ ] Code review complete
 - [ ] Tests pass (build_and_test.sh)
 - [ ] Conventional Commits format
 - [ ] Documentation updated
 - [ ] No breaking changes to Device Code Flow
 
----
+______________________________________________________________________
 
 ### Tier 1.2: OneDrive Client Credentials
 
@@ -62,18 +68,20 @@ EOF
 **Complexity**: Slightly simpler - almost identical to SharePoint
 
 **Files to Modify**:
+
 - `src/providers/onedrive/onedrive_auth.cpp`
 - `src/providers/onedrive/onedrive_auth.hpp`
 
 **Estimated Effort**: 45-60 minutes
 
 **Branch Strategy**:
+
 ```bash
 git checkout -b feat/onedrive-client-credentials
 # Based on: feat/sharepoint-client-credentials patterns
 ```
 
----
+______________________________________________________________________
 
 ## 🎯 Priority Tier 2: High Impact (Session 2-3)
 
@@ -84,18 +92,21 @@ git checkout -b feat/onedrive-client-credentials
 **What's Missing**: RSA-SHA256 signing using OpenSSL EVP
 
 **Root Cause**: Line 132 in `gdrive_auth.cpp`
+
 ```cpp
 // TODO: integrate OpenSSL RSA signing via EVP_DigestSign*
 ```
 
 **Required Changes**:
+
 1. Parse private_key from service account JSON
-2. Extract RSA key using OpenSSL
-3. Create JWT header + payload
-4. Sign with EVP_DigestSign (SHA256)
-5. Exchange JWT for access token
+1. Extract RSA key using OpenSSL
+1. Create JWT header + payload
+1. Sign with EVP_DigestSign (SHA256)
+1. Exchange JWT for access token
 
 **Files to Modify**:
+
 - `src/providers/gdrive/gdrive_auth.cpp` - Implement JWT signing
 - `src/providers/gdrive/gdrive_auth.hpp` - Add ServiceAccountAuth class
 - Update CMakeLists.txt if OpenSSL linking needed
@@ -103,6 +114,7 @@ git checkout -b feat/onedrive-client-credentials
 **Estimated Effort**: 90-120 minutes
 
 **OpenSSL Integration**:
+
 ```cpp
 // Pseudocode
 EVP_PKEY *pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
@@ -113,6 +125,7 @@ EVP_DigestSignFinal(mdctx, sig, sig_len);
 ```
 
 **Testing**:
+
 ```bash
 # Create service account JSON from Google Cloud Console
 export GOOGLE_DRIVE_SERVICE_ACCOUNT=$(cat service-account.json | base64)
@@ -125,7 +138,7 @@ EOF
 
 **Dependencies**: OpenSSL dev (likely already available)
 
----
+______________________________________________________________________
 
 ### Tier 2.2: Dropbox True Device Code Flow
 
@@ -133,12 +146,14 @@ EOF
 
 **What's Missing**: True RFC 8628 Device Code Flow
 
-**Research Needed**: 
+**Research Needed**:
+
 - Does Dropbox API support RFC 8628?
 - If yes: implement device_code grant
 - If no: implement client_credentials as fallback
 
 **Branch Strategy**:
+
 ```bash
 git checkout -b feat/dropbox-device-code-flow
 # Research first, then implement
@@ -146,7 +161,7 @@ git checkout -b feat/dropbox-device-code-flow
 
 **Estimated Effort**: 60-90 minutes (research + implementation)
 
----
+______________________________________________________________________
 
 ## 📊 Implementation Schedule
 
@@ -167,7 +182,7 @@ Session 3 (Next week):
 └─ PR creation + review
 ```
 
----
+______________________________________________________________________
 
 ## 🛠️ Branch Strategy
 
@@ -183,11 +198,12 @@ feat(gdrive): implement service account jwt signing
 feat(dropbox): implement rfc 8628 device code flow
 ```
 
----
+______________________________________________________________________
 
 ## ✅ Completion Checklist
 
 ### Tier 1
+
 - [ ] SharePoint Client Credentials (feat branch created)
   - [ ] Implementation complete
   - [ ] Tests passing
@@ -200,6 +216,7 @@ feat(dropbox): implement rfc 8628 device code flow
   - [ ] PR merged to main
 
 ### Tier 2
+
 - [ ] Google Drive Service Account
   - [ ] Research OpenSSL integration
   - [ ] Implementation complete
@@ -214,35 +231,39 @@ feat(dropbox): implement rfc 8628 device code flow
   - [ ] PR merged to main
 
 ### Documentation
+
 - [ ] AUTHENTICATION_AUDIT.md complete
 - [ ] Provider-specific guides updated
 - [ ] Enterprise authentication guide created
 - [ ] Migration guide for users (Device Code → Client Credentials)
 
----
+______________________________________________________________________
 
 ## 📖 Documentation Artifacts
 
 ### Create These Files
 
 #### 1. `docs/ENTERPRISE_AUTHENTICATION.md`
+
 - When to use Client Credentials vs Device Code
 - Setup guides per provider
 - Security best practices
 - Troubleshooting
 
 #### 2. `docs/SERVICE_ACCOUNTS_GUIDE.md`
+
 - How to create service accounts
 - Required permissions per provider
 - JSON setup
 - CI/CD integration examples
 
 #### 3. `docs/AUTHENTICATION_MIGRATION.md`
+
 - For existing users: upgrade from Device Code to Client Credentials
 - Backward compatibility notes
 - Side-by-side examples
 
----
+______________________________________________________________________
 
 ## 🔐 Security Checklist
 
@@ -255,41 +276,44 @@ For each implementation:
 - [ ] Error messages don't leak sensitive info
 - [ ] Connection strings validated
 
----
+______________________________________________________________________
 
 ## 🚀 Success Metrics
 
 After all Tiers complete:
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Providers with server-to-server auth | 2/6 | 6/6 |
-| CI/CD compatible providers | 2/6 | 6/6 |
-| Enterprise-ready providers | 0/6 | 6/6 |
-| Headless support | 3/6 | 6/6 |
+| Metric                               | Before | After |
+| ------------------------------------ | ------ | ----- |
+| Providers with server-to-server auth | 2/6    | 6/6   |
+| CI/CD compatible providers           | 2/6    | 6/6   |
+| Enterprise-ready providers           | 0/6    | 6/6   |
+| Headless support                     | 3/6    | 6/6   |
 
----
+______________________________________________________________________
 
 ## 📝 Notes
 
 ### Why This Matters
+
 - Users cannot use CloudFS in automation (GitHub Actions, Jenkins, Airflow)
 - Enterprise adoption blocked without service accounts
 - Current implementation is "developer-friendly" but not "enterprise-ready"
 
 ### Why It's Important to Fix Now
+
 - Repository just professionalized
 - Community will ask for this feature
 - PR contributions will ask "where do I implement Client Credentials?"
 - Better to have clear patterns established
 
 ### Implementation Philosophy
+
 - Don't remove Device Code Flow (users still need interactive auth)
 - Add Client Credentials alongside, not replace
 - Reuse same SECRET creation mechanism
 - Maintain backward compatibility
 
----
+______________________________________________________________________
 
 ## 📞 Questions for Review
 
@@ -297,9 +321,10 @@ Before starting implementation:
 
 1. Should Client Credentials be default or opt-in?
    - Recommendation: Opt-in (pass client_secret in SECRET)
-2. Token caching strategy?
+1. Token caching strategy?
    - Recommendation: In-memory cache per connection
-3. Refresh token needed for Client Credentials?
+1. Refresh token needed for Client Credentials?
    - Answer: No (service account tokens don't expire for days)
-4. Error messages for missing credentials?
-   - Recommendation: "Client Credentials not configured. Create SECRET with client_secret parameter."
+1. Error messages for missing credentials?
+   - Recommendation: "Client Credentials not configured. Create SECRET with
+     client_secret parameter."

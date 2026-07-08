@@ -3,7 +3,9 @@
 ## 📊 O que mudou?
 
 ### ✅ Limpeza: 11 scripts removidos
+
 Scripts **redundantes** ou apenas de **testes** foram removidos:
+
 - `auth_sharepoint.sh` - teste
 - `import_from_github_secrets.sh` - redundante com `setup_secrets.sh`
 - `import_from_keyvault.sh` - redundante
@@ -17,18 +19,23 @@ Scripts **redundantes** ou apenas de **testes** foram removidos:
 - `install.sh` - versão antiga/redundante
 
 ### 📦 Organização: Novos scripts em `scripts/`
+
 **5 scripts essenciais** movidos para pasta `scripts/`:
+
 1. `compile_for_current_duckdb.sh` - Recompila para sua versão DuckDB
-2. `duckdb-cloudfs.sh` - Wrapper para abrir com `-unsigned`
-3. `extract_from_aca.sh` - Extrai credenciais da ACA
-4. `setup_secrets.sh` - Menu de setup interativo
-5. `submit_patch.sh` - Guia para submeter patches
+1. `duckdb-cloudfs.sh` - Wrapper para abrir com `-unsigned`
+1. `extract_from_aca.sh` - Extrai credenciais da ACA
+1. `setup_secrets.sh` - Menu de setup interativo
+1. `submit_patch.sh` - Guia para submeter patches
 
 Mais **8 scripts originais** também em `scripts/`:
+
 - `build_and_test.sh`, `check_deps.sh`, `setup_dev_tools.sh`, etc.
 
 ### 📚 Documentação: Tudo em `docs/`
+
 **6 novos documentos** + **6 originais** organizados em `docs/`:
+
 - **Novos**:
   - `COMO_SUBMETER_PATCHES.md`
   - `CONTRIBUTING_PT.md`
@@ -43,30 +50,32 @@ Mais **8 scripts originais** também em `scripts/`:
   - etc.
 
 ### 🔗 Atualizado: Índices de navegação
+
 - [x] `README.md` - Adicionada seção "Project Structure"
 - [x] `docs/README.md` - Novo índice com tabela de navegação
 - [x] `scripts/README.md` - Adicionada seção dos novos scripts
 
----
+______________________________________________________________________
 
 ## 📈 Benefícios
 
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| **Scripts redundantes** | 11 | ✅ 0 |
-| **Scripts na raiz** | 16 | 1 (apenas README) |
-| **Scripts organizado** | ❌ Não | ✅ Em `scripts/` |
-| **Documentação na raiz** | 7 .md | 1 (README) |
-| **Documentação organizada** | ❌ Não | ✅ Em `docs/` |
-| **Navegabilidade** | ⚠️ Confusa | ✅ Excelente |
-| **Índices de navegação** | ❌ Não | ✅ 3 READMEs |
-| **Tamanho da raiz** | Poluído | ✅ Limpo |
+| Aspecto                     | Antes      | Depois            |
+| --------------------------- | ---------- | ----------------- |
+| **Scripts redundantes**     | 11         | ✅ 0              |
+| **Scripts na raiz**         | 16         | 1 (apenas README) |
+| **Scripts organizado**      | ❌ Não     | ✅ Em `scripts/`  |
+| **Documentação na raiz**    | 7 .md      | 1 (README)        |
+| **Documentação organizada** | ❌ Não     | ✅ Em `docs/`     |
+| **Navegabilidade**          | ⚠️ Confusa | ✅ Excelente      |
+| **Índices de navegação**    | ❌ Não     | ✅ 3 READMEs      |
+| **Tamanho da raiz**         | Poluído    | ✅ Limpo          |
 
----
+______________________________________________________________________
 
 ## 🎯 Resultado
 
 ### Antes (Poluído)
+
 ```
 cloudfs/
 ├── README.md
@@ -87,6 +96,7 @@ cloudfs/
 ```
 
 ### Depois (Organizado ✨)
+
 ```
 cloudfs/
 ├── README.md ← Com links para docs/ e scripts/
@@ -115,25 +125,28 @@ cloudfs/
 └── ...
 ```
 
----
+______________________________________________________________________
 
 ## 📖 Navegação Melhorada
 
 ### Para Usuários
+
 1. Começar: `docs/START_HERE.md`
-2. Setup: `docs/SETUP_GUIDE.md`
-3. Exemplos: `docs/QUICKSTART_SHAREPOINT.md`
+1. Setup: `docs/SETUP_GUIDE.md`
+1. Exemplos: `docs/QUICKSTART_SHAREPOINT.md`
 
 ### Para Contribuidores
+
 1. Visão geral: `docs/CONTRIBUTING_PT.md`
-2. Submeter patch: `docs/COMO_SUBMETER_PATCHES.md`
-3. Referência rápida: `docs/SUBMIT_PATCH_QUICK_REFERENCE.md`
+1. Submeter patch: `docs/COMO_SUBMETER_PATCHES.md`
+1. Referência rápida: `docs/SUBMIT_PATCH_QUICK_REFERENCE.md`
 
 ### Para Scripts
-1. Índice: `scripts/README.md`
-2. Usar: `./scripts/script_name.sh`
 
----
+1. Índice: `scripts/README.md`
+1. Usar: `./scripts/script_name.sh`
+
+______________________________________________________________________
 
 ## ✅ Checklist
 
@@ -146,7 +159,7 @@ cloudfs/
 - [x] Raiz do repositório limpa ✨
 - [x] Navegabilidade melhorada 100%
 
----
+______________________________________________________________________
 
 ## 🎓 Como Usar Agora
 
@@ -165,7 +178,7 @@ duckdb-cloudfs
 ./scripts/submit_patch.sh
 ```
 
----
+______________________________________________________________________
 
 ## 📝 Notas
 
@@ -175,6 +188,6 @@ duckdb-cloudfs
 - Navegação através de **índices bem estruturados**
 - Fácil encontrar o que procura
 
----
+______________________________________________________________________
 
 **Reorganização concluída com sucesso!** 🎉

@@ -19,19 +19,19 @@ git push origin seu-branch
 # → Abrir PR em: github.com/trouchet/cloudfs
 ```
 
----
+______________________________________________________________________
 
 ## 📚 Documentação Criada
 
 Criei 3 documentos para ajudar:
 
-| Arquivo | Para quem | Conteúdo |
-|---------|-----------|----------|
-| **[CONTRIBUTING_PT.md](./CONTRIBUTING_PT.md)** | 🇧🇷 Português | Guia completo passo-a-passo (checklist, exemplos, troubleshooting) |
-| **[SUBMIT_PATCH_QUICK_REFERENCE.md](./SUBMIT_PATCH_QUICK_REFERENCE.md)** | ⚡ Rápida | Referência rápida (comandos essenciais, formatos) |
-| **[submit_patch.sh](./submit_patch.sh)** | 🤖 Automático | Script que automatiza os passos |
+| Arquivo                                                                  | Para quem     | Conteúdo                                                           |
+| ------------------------------------------------------------------------ | ------------- | ------------------------------------------------------------------ |
+| **[CONTRIBUTING_PT.md](./CONTRIBUTING_PT.md)**                           | 🇧🇷 Português  | Guia completo passo-a-passo (checklist, exemplos, troubleshooting) |
+| **[SUBMIT_PATCH_QUICK_REFERENCE.md](./SUBMIT_PATCH_QUICK_REFERENCE.md)** | ⚡ Rápida     | Referência rápida (comandos essenciais, formatos)                  |
+| **[submit_patch.sh](./submit_patch.sh)**                                 | 🤖 Automático | Script que automatiza os passos                                    |
 
----
+______________________________________________________________________
 
 ## 🚀 3 Formas de Submeter
 
@@ -79,22 +79,22 @@ Closes #123"
 git push origin feat/minha-feature
 ```
 
----
+______________________________________________________________________
 
 ## ✅ Requisitos Obrigatórios
 
 Antes de submeter, TODOS os pontos abaixo precisam passar:
 
-| Requisito | Como Validar | Status |
-|-----------|-------------|--------|
-| 1. **Código formatado** | `npm run lint` | ❌ → ✅ |
-| 2. **Build compila** | `./build_and_test.sh` | ❌ → ✅ |
-| 3. **Commit format** | `git commit -m "feat(...)"` | ❌ → ✅ |
-| 4. **Sem conflitos** | `git status` limpo | ❌ → ✅ |
+| Requisito               | Como Validar                | Status  |
+| ----------------------- | --------------------------- | ------- |
+| 1. **Código formatado** | `npm run lint`              | ❌ → ✅ |
+| 2. **Build compila**    | `./build_and_test.sh`       | ❌ → ✅ |
+| 3. **Commit format**    | `git commit -m "feat(...)"` | ❌ → ✅ |
+| 4. **Sem conflitos**    | `git status` limpo          | ❌ → ✅ |
 
 Se qualquer um falhar, seu PR será rejeitado.
 
----
+______________________________________________________________________
 
 ## 🏷️ Formato de Commit (CRÍTICO!)
 
@@ -127,25 +127,26 @@ fixed stuff                    ❌ Vago
 feat(auth) - add feature       ❌ Usar `:` não `-`
 ```
 
----
+______________________________________________________________________
 
 ## 🔄 Processo Automático do GitHub
 
 Quando você abre um PR, GitHub automaticamente:
 
 1. ✅ Roda testes em **3 plataformas** (Linux, macOS, Windows)
-2. ✅ Valida **formatação** (clang-format, shellcheck, etc)
-3. ✅ Executa **testes unitários**
-4. ❌ Se algo falhar, você recebe feedback
-5. 👥 Maintainers fazem **code review**
+1. ✅ Valida **formatação** (clang-format, shellcheck, etc)
+1. ✅ Executa **testes unitários**
+1. ❌ Se algo falhar, você recebe feedback
+1. 👥 Maintainers fazem **code review**
 
 **Você pode fazer mais commits** enquanto aguarda review!
 
----
+______________________________________________________________________
 
 ## 🆘 Problemas Comuns
 
 ### "commitlint failed"
+
 ```bash
 # Mensagem de commit incorreta
 # Solução: Reparar mensagem
@@ -153,6 +154,7 @@ git commit --amend -m "feat(sharepoint): seu commit correto"
 ```
 
 ### "npm run lint failed"
+
 ```bash
 # Código não está formatado
 # Solução: Formatar automaticamente
@@ -162,6 +164,7 @@ git add . && git commit --amend
 ```
 
 ### "Build failed"
+
 ```bash
 # Build não compila
 # Solução: Limpar cache e recompilar
@@ -169,7 +172,7 @@ rm -rf build .cache
 ./build_and_test.sh
 ```
 
----
+______________________________________________________________________
 
 ## 🎓 Exemplo: Submeter Patch de Client Credentials
 
@@ -209,7 +212,7 @@ git push origin feat/sharepoint-client-credentials
 # github.com/trouchet/cloudfs/pull/new/feat/sharepoint-client-credentials
 ```
 
----
+______________________________________________________________________
 
 ## 📊 Checklist Final
 
@@ -223,15 +226,15 @@ git push origin feat/sharepoint-client-credentials
 - [ ] Abri PR com descrição clara
 - [ ] Aguardando review 🎉
 
----
+______________________________________________________________________
 
 ## 🎯 Próximos Passos
 
 1. **Agora**: Leia um dos 3 documentos criados
-2. **Depois**: Faça seu primeiro patch
-3. **Resultado**: Seu código no repositório oficial!
+1. **Depois**: Faça seu primeiro patch
+1. **Resultado**: Seu código no repositório oficial!
 
----
+______________________________________________________________________
 
 ## 📖 Referências Rápidas
 
@@ -239,7 +242,7 @@ git push origin feat/sharepoint-client-credentials
 - **Git Workflow**: Ver [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)
 - **Build Guide**: Ver [docs/BUILD_QUICKSTART.md](./docs/BUILD_QUICKSTART.md)
 
----
+______________________________________________________________________
 
 ## 💬 Perguntas?
 

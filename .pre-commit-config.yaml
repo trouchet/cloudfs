@@ -82,13 +82,13 @@ repos:
   # Markdown Formatting
   # ============================================================================
   - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.16
+    rev: 0.7.22
     hooks:
       - id: mdformat
         args: ['--wrap', '80']
         additional_dependencies:
-          - mdformat-gfm==0.4.1
-          - mdformat-tables==0.4.0
+          - mdformat-gfm==1.0.0
+          - mdformat-tables==1.0.0
 
   # ============================================================================
   # Commit Message Validation (commitlint)

@@ -1,6 +1,7 @@
 # 🚀 CloudFS + SharePoint - Setup Completo
 
-Sua extensão CloudFS foi publicada! Aqui está o guia **rápido e fácil** para usar com SharePoint.
+Sua extensão CloudFS foi publicada! Aqui está o guia **rápido e fácil** para
+usar com SharePoint.
 
 ## 📦 Arquivos de Setup Criados
 
@@ -12,12 +13,14 @@ Sua extensão CloudFS foi publicada! Aqui está o guia **rápido e fácil** para
 ## ⚡ Instalação Rápida (3 passos)
 
 ### 1️⃣ Compilar e Instalar
+
 ```bash
 cd /home/pingu/github/cloudfs
 ./install.sh
 ```
 
 **Ou manualmente:**
+
 ```bash
 # Compilar
 make release
@@ -28,6 +31,7 @@ cp build/release/repository/cloudfs.duckdb_extension ~/.duckdb/extensions/v1.5.1
 ```
 
 ### 2️⃣ Configurar Credenciais do SharePoint
+
 ```bash
 # Defina as variáveis de ambiente
 export CLOUDFS_SHAREPOINT_TENANT_ID='seu-tenant-id'
@@ -36,6 +40,7 @@ export CLOUDFS_SHAREPOINT_CLIENT_SECRET='seu-app-secret'
 ```
 
 ### 3️⃣ Usar no DuckDB
+
 ```bash
 duckdb
 ```
@@ -54,11 +59,12 @@ SELECT * FROM read_csv('spfs://sites/seu-site/Shared Documents/dados.csv');
 SELECT * FROM 'spfs://sites/seu-site/Shared Documents/report.parquet';
 ```
 
----
+______________________________________________________________________
 
 ## 🔐 Configuração de Autenticação
 
 ### Opção A: Variáveis de Ambiente (Recomendado para Produção)
+
 ```bash
 export CLOUDFS_SHAREPOINT_TENANT_ID='seu-tenant'
 export CLOUDFS_SHAREPOINT_CLIENT_ID='seu-id'
@@ -68,6 +74,7 @@ duckdb
 ```
 
 ### Opção B: CREATE SECRET (Apenas Desenvolvimento!)
+
 ```sql
 CREATE SECRET sharepoint_secret (
     TYPE sharepoint,
@@ -78,11 +85,12 @@ CREATE SECRET sharepoint_secret (
 );
 ```
 
----
+______________________________________________________________________
 
 ## 📊 Exemplos de Uso
 
 ### Ler dados do SharePoint
+
 ```sql
 LOAD cloudfs;
 
@@ -97,6 +105,7 @@ SELECT * FROM read_json('spfs://sites/vendas/Shared Documents/config.json');
 ```
 
 ### Análise com cache automático
+
 ```sql
 -- Primeira query: busca do SharePoint + cache
 SELECT COUNT(*) as total, AVG(valor) as media
@@ -109,6 +118,7 @@ WHERE id = 12345;
 ```
 
 ### Exportar para SharePoint
+
 ```sql
 -- Criar resultado e enviar para SharePoint
 COPY (
@@ -120,6 +130,7 @@ COPY (
 ```
 
 ### Cópia entre provedores
+
 ```sql
 -- OneDrive → SharePoint
 COPY (
@@ -127,11 +138,12 @@ COPY (
 ) TO 'spfs://sites/dados/Shared Documents/dados_copia.parquet' (FORMAT PARQUET);
 ```
 
----
+______________________________________________________________________
 
 ## 🛠️ Troubleshooting
 
 ### ❌ Erro: "Extension not found"
+
 ```bash
 # Verificar se a extensão foi instalada
 ls -la ~/.duckdb/extensions/v1.5.1/linux_amd64/
@@ -141,6 +153,7 @@ ls -la ~/.duckdb/extensions/v1.5.1/linux_amd64/
 ```
 
 ### ❌ Erro: "Authentication failed"
+
 ```bash
 # Verificar credenciais
 echo $CLOUDFS_SHAREPOINT_TENANT_ID
@@ -157,6 +170,7 @@ CREATE SECRET test (
 ```
 
 ### ❌ Erro: "File not found"
+
 ```sql
 -- Listar o que existe
 SELECT * FROM ls('spfs://sites/seu-site/');
@@ -169,6 +183,7 @@ SELECT * FROM stat('spfs://sites/seu-site/Shared Documents/seu-arquivo.csv');
 ```
 
 ### ❌ Performance lenta na primeira query
+
 ```sql
 -- Isso é normal! A extensão:
 -- 1. Conecta ao SharePoint
@@ -179,25 +194,25 @@ SELECT * FROM stat('spfs://sites/seu-site/Shared Documents/seu-arquivo.csv');
 -- Próximas queries são muito rápidas (cache de 3 níveis)
 ```
 
----
+______________________________________________________________________
 
 ## 📚 Funcionalidades
 
-| Recurso | Status | Descrição |
-|---------|--------|-----------|
-| Listar arquivos | ✅ | `ls()` |
-| Metadados | ✅ | `stat()` |
-| Espaço em disco | ✅ | `du()` |
-| Ler CSV | ✅ | `read_csv()` |
-| Ler JSON | ✅ | `read_json()` |
-| Ler Parquet | ✅ | `read_parquet()` |
-| Escrever dados | ✅ | `COPY ... TO` |
-| Delta Lake | ✅ | Suportado |
-| Iceberg | ✅ | Suportado |
-| Cache LRU | ✅ | 3 níveis |
-| OAuth2 | ✅ | Automático |
+| Recurso         | Status | Descrição        |
+| --------------- | ------ | ---------------- |
+| Listar arquivos | ✅     | `ls()`           |
+| Metadados       | ✅     | `stat()`         |
+| Espaço em disco | ✅     | `du()`           |
+| Ler CSV         | ✅     | `read_csv()`     |
+| Ler JSON        | ✅     | `read_json()`    |
+| Ler Parquet     | ✅     | `read_parquet()` |
+| Escrever dados  | ✅     | `COPY ... TO`    |
+| Delta Lake      | ✅     | Suportado        |
+| Iceberg         | ✅     | Suportado        |
+| Cache LRU       | ✅     | 3 níveis         |
+| OAuth2          | ✅     | Automático       |
 
----
+______________________________________________________________________
 
 ## 🔗 Protocolos Suportados
 
@@ -210,32 +225,34 @@ sftp://user@host/path/file.csv                        ← SFTP
 vfs://localhost:19876/data/file.json                  ← VFS Agent
 ```
 
----
+______________________________________________________________________
 
 ## 💡 Dicas de Performance
 
 1. **Use Parquet ao invés de CSV** para arquivos grandes
-2. **Filtre dentro da query** ao invés de depois: `WHERE date > '2024-01-01'`
-3. **O cache é automático** - próximas queries são rápidas
-4. **Use `LIMIT` no início** para testar antes de processar tudo
-5. **Combine múltiplos arquivos** com `glob patterns`: `spfs://sites/*/Shared Documents/*.parquet`
+1. **Filtre dentro da query** ao invés de depois: `WHERE date > '2024-01-01'`
+1. **O cache é automático** - próximas queries são rápidas
+1. **Use `LIMIT` no início** para testar antes de processar tudo
+1. **Combine múltiplos arquivos** com `glob patterns`:
+   `spfs://sites/*/Shared Documents/*.parquet`
 
----
+______________________________________________________________________
 
 ## 🆘 Suporte
 
 Veja mais em:
+
 - [`QUICKSTART_SHAREPOINT.md`](QUICKSTART_SHAREPOINT.md) - Guia completo
 - [`DEVELOPMENT.md`](docs/DEVELOPMENT.md) - Desenvolvimento
 - [`README.md`](README.md) - Visão geral da extensão
 
----
+______________________________________________________________________
 
 ## 🎯 Próximos Passos
 
 1. ✅ Instalar extensão: `./install.sh`
-2. ✅ Configurar credenciais SharePoint
-3. ✅ Testar primeira query
-4. ✅ Usar em seu projeto DuckDB!
+1. ✅ Configurar credenciais SharePoint
+1. ✅ Testar primeira query
+1. ✅ Usar em seu projeto DuckDB!
 
 **Bom trabalho!** 🚀

@@ -126,9 +126,12 @@ cloudfs/
 - **[Setup Guide](docs/SETUP_GUIDE.md)** - Comprehensive setup instructions
 - **[Development Guide](docs/DEVELOPMENT.md)** - Contributing and development
   workflow
-- **[SharePoint Quickstart](docs/QUICKSTART_SHAREPOINT.md)** - SharePoint integration examples
-- **[How to Contribute](docs/CONTRIBUTING_PT.md)** - Contributing guidelines (Portuguese)
-- **[Submit Patches](docs/COMO_SUBMETER_PATCHES.md)** - Quick guide to submitting patches (Portuguese)
+- **[SharePoint Quickstart](docs/QUICKSTART_SHAREPOINT.md)** - SharePoint
+  integration examples
+- **[How to Contribute](docs/CONTRIBUTING_PT.md)** - Contributing guidelines
+  (Portuguese)
+- **[Submit Patches](docs/COMO_SUBMETER_PATCHES.md)** - Quick guide to
+  submitting patches (Portuguese)
 - **[Build Quickstart](docs/BUILD_QUICKSTART.md)** - Detailed build instructions
 - **[Commit Guidelines](docs/COMMIT_PLAN.md)** - Git commit conventions
 - **[Adding a Provider](docs/adding_a_provider.md)** - How to add new cloud

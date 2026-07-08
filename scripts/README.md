@@ -10,8 +10,7 @@ the CloudFS project.
 #### `setup_dev_tools.sh`
 
 **Purpose**: Install all development tools\
-**Usage**:
-`./scripts/setup_dev_tools.sh`\
+**Usage**: `./scripts/setup_dev_tools.sh`\
 **Installs**:
 
 - Python 3, Node.js, npm
@@ -26,8 +25,7 @@ ______________________________________________________________________
 #### `validate_dev_setup.sh`
 
 **Purpose**: Validate development environment\
-**Usage**:
-`./scripts/validate_dev_setup.sh` or `make validate`\
+**Usage**: `./scripts/validate_dev_setup.sh` or `make validate`\
 **Checks**:
 
 - All dev tools installed
@@ -42,8 +40,7 @@ ______________________________________________________________________
 #### `check_setup_status.sh`
 
 **Purpose**: Visual progress dashboard\
-**Usage**:
-`./scripts/check_setup_status.sh`\
+**Usage**: `./scripts/check_setup_status.sh`\
 **Shows**:
 
 - Progress bar of setup completion
@@ -59,8 +56,7 @@ ______________________________________________________________________
 #### `build_and_test.sh`
 
 **Purpose**: Full build and test pipeline\
-**Usage**:
-`./scripts/build_and_test.sh` or `make build`\
+**Usage**: `./scripts/build_and_test.sh` or `make build`\
 **Does**:
 
 - Checks dependencies
@@ -77,8 +73,7 @@ ______________________________________________________________________
 #### `check_deps.sh`
 
 **Purpose**: Verify build dependencies\
-**Usage**:
-`./scripts/check_deps.sh`\
+**Usage**: `./scripts/check_deps.sh`\
 **Checks**:
 
 - cmake, ninja, compilers
@@ -95,8 +90,7 @@ ______________________________________________________________________
 #### `test_commitlint.sh`
 
 **Purpose**: Test commit message validation\
-**Usage**:
-`./scripts/test_commitlint.sh`\
+**Usage**: `./scripts/test_commitlint.sh`\
 **Tests**:
 
 - Valid commit messages (should pass)
@@ -110,8 +104,7 @@ ______________________________________________________________________
 #### `execute_commit_plan.sh`
 
 **Purpose**: Execute structured commit plan\
-**Usage**:
-`./scripts/execute_commit_plan.sh`\
+**Usage**: `./scripts/execute_commit_plan.sh`\
 **Does**:
 
 - Creates multiple atomic commits
@@ -337,10 +330,11 @@ ______________________________________________________________________
 
 ### compile_for_current_duckdb.sh
 
-**Purpose**: Auto-compile CloudFS for your DuckDB version  
-**Usage**: `./scripts/compile_for_current_duckdb.sh`  
-**When to use**: First setup, after updating DuckDB  
+**Purpose**: Auto-compile CloudFS for your DuckDB version\
+**Usage**: `./scripts/compile_for_current_duckdb.sh`\
+**When to use**: First setup, after updating DuckDB\
 **Features**:
+
 - Detects your DuckDB version automatically
 - Checks out matching branch
 - Cleans and recompiles
@@ -350,38 +344,41 @@ ______________________________________________________________________
 
 ### extract_from_aca.sh
 
-**Purpose**: Extract SharePoint credentials from Azure Container Apps  
-**Usage**: `./scripts/extract_from_aca.sh`  
-**When to use**: You have credentials in Azure ACA  
-**Output**: Saves to `~/.env.sharepoint`  
+**Purpose**: Extract SharePoint credentials from Azure Container Apps\
+**Usage**: `./scripts/extract_from_aca.sh`\
+**When to use**: You have credentials in Azure ACA\
+**Output**: Saves to `~/.env.sharepoint`\
 **Requires**: `az` CLI, `jq`
 
 ______________________________________________________________________
 
 ### setup_secrets.sh
 
-**Purpose**: Interactive menu for credential setup  
-**Usage**: `./scripts/setup_secrets.sh`  
-**When to use**: First setup, adding credentials  
+**Purpose**: Interactive menu for credential setup\
+**Usage**: `./scripts/setup_secrets.sh`\
+**When to use**: First setup, adding credentials\
 **Options**:
+
 - [1] Local .env file
 - [2] Azure Key Vault
-- [3] GitHub Secrets  
+- [3] GitHub Secrets
 - [4] Manual entry
 
 ______________________________________________________________________
 
 ### duckdb-cloudfs.sh
 
-**Purpose**: Wrapper to run DuckDB with CloudFS pre-loaded  
-**Usage**: `./scripts/duckdb-cloudfs.sh` or `duckdb-cloudfs` (if symlinked)  
-**When to use**: Every time you want to use CloudFS  
+**Purpose**: Wrapper to run DuckDB with CloudFS pre-loaded\
+**Usage**: `./scripts/duckdb-cloudfs.sh` or `duckdb-cloudfs` (if symlinked)\
+**When to use**: Every time you want to use CloudFS\
 **Features**:
+
 - Handles `-unsigned` flag automatically
 - Pre-loads cloudfs extension
 - Fully compatible with all DuckDB commands
 
 **Setup symlink**:
+
 ```bash
 ln -sf ~/github/cloudfs/scripts/duckdb-cloudfs.sh ~/bin/duckdb-cloudfs
 ```
@@ -390,10 +387,11 @@ ______________________________________________________________________
 
 ### submit_patch.sh
 
-**Purpose**: Interactive guide for submitting patches  
-**Usage**: `./scripts/submit_patch.sh`  
-**When to use**: Contributing code to CloudFS  
+**Purpose**: Interactive guide for submitting patches\
+**Usage**: `./scripts/submit_patch.sh`\
+**When to use**: Contributing code to CloudFS\
 **What it does**:
+
 - ✅ Validates prerequisites
 - ✅ Sets up upstream remote
 - ✅ Creates feature branch

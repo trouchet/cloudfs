@@ -3,6 +3,7 @@
 ## 1️⃣ Instalar a Extensão
 
 ### Opção A: Build local (Recomendado para desenvolvimento)
+
 ```bash
 cd /home/pingu/github/cloudfs
 make release
@@ -15,17 +16,19 @@ cp build/release/repository/cloudfs.duckdb_extension ~/.duckdb/extensions/v1.5.1
 ```
 
 ### Opção B: Usar a extensão do repositório (quando disponível)
+
 ```bash
 duckdb
 > INSTALL cloudfs FROM repository;
 > LOAD cloudfs;
 ```
 
----
+______________________________________________________________________
 
 ## 2️⃣ Configurar SharePoint
 
 ### Criar Secret com Credenciais
+
 ```sql
 -- No DuckDB
 LOAD cloudfs;
@@ -46,11 +49,12 @@ CREATE SECRET sharepoint_secret (
 -- CLOUDFS_SHAREPOINT_CLIENT_SECRET
 ```
 
----
+______________________________________________________________________
 
 ## 3️⃣ Usar Protocolos SharePoint
 
 ### Listar Arquivos
+
 ```sql
 -- Listar arquivos em um site SharePoint
 SELECT * FROM ls('spfs://sites/team-name/Shared Documents/');
@@ -60,6 +64,7 @@ SELECT * FROM ls('spfs://sites/team-name/Shared Documents/*.csv');
 ```
 
 ### Ler Dados Diretamente
+
 ```sql
 -- Ler um Parquet
 SELECT * FROM 'spfs://sites/team-name/Shared Documents/data.parquet';
@@ -72,6 +77,7 @@ SELECT * FROM read_json('spfs://sites/team-name/Shared Documents/data.json');
 ```
 
 ### Informações de Arquivo
+
 ```sql
 -- Metadados de arquivo
 SELECT name, size, modified FROM stat('spfs://sites/team-name/Shared Documents/file.csv');
@@ -81,6 +87,7 @@ SELECT * FROM du('spfs://sites/team-name/Shared Documents/');
 ```
 
 ### Escrever Dados
+
 ```sql
 -- Exportar para SharePoint
 COPY (
@@ -88,11 +95,12 @@ COPY (
 ) TO 'spfs://sites/team-name/Shared Documents/output.parquet' (FORMAT PARQUET);
 ```
 
----
+______________________________________________________________________
 
 ## 4️⃣ Exemplos Práticos
 
 ### Exemplo 1: Ler múltiplos CSVs do SharePoint
+
 ```sql
 LOAD cloudfs;
 
@@ -105,6 +113,7 @@ SELECT COUNT(*) as total, COUNT(DISTINCT id) as unique_ids FROM consolidado;
 ```
 
 ### Exemplo 2: Cópia entre SharePoint e OneDrive
+
 ```sql
 -- Copiar de SharePoint para OneDrive
 COPY (
@@ -113,6 +122,7 @@ COPY (
 ```
 
 ### Exemplo 3: Query com cache inteligente
+
 ```sql
 -- Primeira query: busca do SharePoint + cache
 SELECT customer_id, SUM(amount) as total
@@ -126,11 +136,12 @@ SELECT * FROM 'spfs://sites/sales/Data/transactions.parquet'
 WHERE customer_id = 123;
 ```
 
----
+______________________________________________________________________
 
 ## 🔧 Troubleshooting
 
 ### Erro: "Extension not found"
+
 ```bash
 # Verifique o diretório correto
 ls -la ~/.duckdb/extensions/v1.5.1/linux_amd64/
@@ -140,6 +151,7 @@ cp build/release/repository/cloudfs.duckdb_extension ~/.duckdb/extensions/v1.5.1
 ```
 
 ### Erro: "Authentication failed"
+
 ```bash
 # Verifique as credenciais
 echo $CLOUDFS_SHAREPOINT_TENANT_ID
@@ -156,6 +168,7 @@ CREATE SECRET test_secret (
 ```
 
 ### Erro: "File not found"
+
 ```bash
 # Liste os arquivos disponíveis
 SELECT * FROM ls('spfs://sites/your-site/');
@@ -164,26 +177,26 @@ SELECT * FROM ls('spfs://sites/your-site/');
 SELECT * FROM stat('spfs://sites/your-site/Shared Documents/');
 ```
 
----
+______________________________________________________________________
 
 ## 📚 Referências Rápidas
 
-| Função | Uso |
-|--------|-----|
-| `ls()` | Listar arquivos |
-| `stat()` | Metadados de arquivo |
-| `du()` | Uso de espaço em disco |
-| `read_csv()` | Ler CSV |
-| `read_json()` | Ler JSON |
-| `read_parquet()` | Ler Parquet |
-| `COPY ... TO` | Exportar dados |
+| Função           | Uso                    |
+| ---------------- | ---------------------- |
+| `ls()`           | Listar arquivos        |
+| `stat()`         | Metadados de arquivo   |
+| `du()`           | Uso de espaço em disco |
+| `read_csv()`     | Ler CSV                |
+| `read_json()`    | Ler JSON               |
+| `read_parquet()` | Ler Parquet            |
+| `COPY ... TO`    | Exportar dados         |
 
----
+______________________________________________________________________
 
 ## 🎯 Próximos Passos
 
 1. ✅ Compilar extensão
-2. ✅ Instalar em DuckDB
-3. ✅ Configurar autenticação SharePoint
-4. ✅ Testar queries
-5. 📖 Ver [DEVELOPMENT.md](docs/DEVELOPMENT.md) para mais detalhes
+1. ✅ Instalar em DuckDB
+1. ✅ Configurar autenticação SharePoint
+1. ✅ Testar queries
+1. 📖 Ver [DEVELOPMENT.md](docs/DEVELOPMENT.md) para mais detalhes
