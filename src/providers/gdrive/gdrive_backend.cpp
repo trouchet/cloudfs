@@ -220,4 +220,53 @@ bool GDriveBackend::CopyItem(const std::string&, const std::string& src_id,
     return true;
 }
 
+bool GDriveBackend::AbortUpload(const CloudUploadSession& session, const std::string& tok,
+                                std::string& err) {
+    if (session.upload_url.empty())
+        return true;
+    // DELETE the resumable session URI to free server-side resources
+    auto resp = http_.Delete(session.upload_url, tok);
+    // 499 = session already completed/expired per Google API
+    if (resp.status != 204 && resp.status != 499) {
+        err = "abort upload failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
+bool GDriveBackend::ListFolderRecursive(const std::string&, const std::string& folder_id,
+                                        const std::string& tok,
+                                        const std::function<void(const CloudItem&)>& cb,
+                                        std::string& err) {
+    // Use Google Drive's `in ancestors` query: returns ALL descendants in a single paged call
+    // This is O(1) API calls regardless of folder depth vs O(depth) for the default fallback.
+    std::string page_token;
+    do {
+        std::string url = kApiBase + "/files?q='" + folder_id +
+                          "'+in+ancestors+and+trashed=false"
+                          "&fields=nextPageToken,files(id,name,size,mimeType,md5Checksum)"
+                          "&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1000";
+        if (!page_token.empty())
+            url += "&" + UrlUtil::BuildQuery({{"pageToken", page_token}});
+
+        auto resp = http_.Get(url, tok);
+        if (!resp.ok()) {
+            err = "list recursive failed " + std::to_string(resp.status);
+            return false;
+        }
+        for (auto& j : JsonUtil::GetArray(resp.body, "files")) {
+            CloudItem c;
+            c.id = JsonUtil::GetString(j, "id");
+            c.name = JsonUtil::GetString(j, "name");
+            c.size = JsonUtil::GetInt64(j, "size");
+            c.etag = JsonUtil::GetString(j, "md5Checksum");
+            c.mime_type = JsonUtil::GetString(j, "mimeType");
+            c.is_folder = (c.mime_type == "application/vnd.google-apps.folder");
+            cb(c);
+        }
+        page_token = JsonUtil::GetString(resp.body, "nextPageToken");
+    } while (!page_token.empty());
+    return true;
+}
+
 } // namespace duckdb

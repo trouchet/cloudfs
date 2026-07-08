@@ -74,6 +74,15 @@ class SharePointBackend : public ICloudBackend {
                   const std::string& dst_parent_id, const std::string& dst_name,
                   const std::string& token, std::string& err) override;
 
+    // Microsoft Graph has no recursive-list API; override with BFS for explicit control.
+    bool ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                             const std::string& token,
+                             const std::function<void(const CloudItem&)>& cb,
+                             std::string& err) override;
+
+    bool AbortUpload(const CloudUploadSession& session, const std::string& token,
+                     std::string& err) override;
+
   private:
     // root = "https://tenant.sharepoint.com|/sites/SiteName" → drive_id
     struct SiteInfo {

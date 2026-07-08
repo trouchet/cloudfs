@@ -38,7 +38,8 @@ class GDriveBackend : public ICloudBackend {
         caps.supports_range_reads = true;       // via Range header on alt=media
         caps.supports_resumable_uploads = true; // resumable upload protocol
         caps.supports_server_side_copy = true;  // files.copy API
-        caps.supports_recursive_list = false;
+        caps.supports_recursive_list = false;   // ListFolderRecursive is optimised but items lack
+                                                // c.path — GlobRecursive cannot use it yet
         caps.needs_total_size_upfront = false;
         caps.upload_chunk_alignment = 256 * 1024; // 256 KiB (Google requirement)
         caps.min_upload_chunk = 256 * 1024;
@@ -66,6 +67,12 @@ class GDriveBackend : public ICloudBackend {
         return false;
     }
 
+    // Override with efficient single-query recursive list (in ancestors)
+    bool ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                             const std::string& token,
+                             const std::function<void(const CloudItem&)>& cb,
+                             std::string& err) override;
+
     bool ListFolder(const std::string& root, const std::string& folder_id, const std::string& token,
                     const std::function<void(const CloudItem&)>& cb, std::string& cursor,
                     std::string& err) override;
@@ -87,6 +94,9 @@ class GDriveBackend : public ICloudBackend {
     bool CopyItem(const std::string& root, const std::string& src_id,
                   const std::string& dst_parent_id, const std::string& dst_name,
                   const std::string& token, std::string& err) override;
+
+    bool AbortUpload(const CloudUploadSession& session, const std::string& token,
+                     std::string& err) override;
 
   private:
     // Path resolution: Google Drive has no native path API.

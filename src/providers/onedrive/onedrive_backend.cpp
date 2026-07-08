@@ -163,4 +163,40 @@ bool OneDriveBackend::CreateFolder(const std::string& root, const std::string& p
     return true;
 }
 
+bool OneDriveBackend::ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                                          const std::string& tok,
+                                          const std::function<void(const CloudItem&)>& cb,
+                                          std::string& err) {
+    // Microsoft Graph has no recursive-list API; use BFS (breadth-first order).
+    std::vector<std::string> queue;
+    queue.push_back(folder_id);
+    for (size_t i = 0; i < queue.size(); ++i) {
+        std::string cursor;
+        do {
+            if (!ListFolder(
+                    root, queue[i], tok,
+                    [&](const CloudItem& item) {
+                        cb(item);
+                        if (item.is_folder)
+                            queue.push_back(item.id);
+                    },
+                    cursor, err))
+                return false;
+        } while (!cursor.empty());
+    }
+    return true;
+}
+
+bool OneDriveBackend::AbortUpload(const CloudUploadSession& session, const std::string& tok,
+                                  std::string& err) {
+    if (session.upload_url.empty())
+        return true;
+    auto resp = http_.Delete(session.upload_url, tok);
+    if (resp.status != 204 && resp.status != 404) {
+        err = "abort upload failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 } // namespace duckdb
