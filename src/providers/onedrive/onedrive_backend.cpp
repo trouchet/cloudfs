@@ -168,13 +168,37 @@ bool OneDriveBackend::CopyItem(const std::string& root, const std::string& src_i
                                const std::string& tok, std::string& err) {
     std::string url =
         "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_id + "/copy";
-std::string body =
-    "{\"parentReference\":{\"id\":\"" + JsonUtil::EscapeJsonString(dst_parent_id) +
-    "\"},\"name\":\"" + JsonUtil::EscapeJsonString(dst_name) + "\"}";
+    std::string body =
+        "{\"parentReference\":{\"id\":\"" + JsonUtil::EscapeJsonString(dst_parent_id) +
+        "\"},\"name\":\"" + JsonUtil::EscapeJsonString(dst_name) + "\"}";
     auto resp = http_.Post(url, tok, body);
     if (resp.status != 202) {
         err = "copy failed (" + std::to_string(resp.status) + ")";
         return false;
+    }
+    return true;
+}
+
+bool OneDriveBackend::ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                                          const std::string& tok,
+                                          const std::function<void(const CloudItem&)>& cb,
+                                          std::string& err) {
+    // Microsoft Graph has no recursive-list API; use BFS (breadth-first order).
+    std::vector<std::string> queue;
+    queue.push_back(folder_id);
+    for (size_t i = 0; i < queue.size(); ++i) {
+        std::string cursor;
+        do {
+            if (!ListFolder(
+                    root, queue[i], tok,
+                    [&](const CloudItem& item) {
+                        cb(item);
+                        if (item.is_folder)
+                            queue.push_back(item.id);
+                    },
+                    cursor, err))
+                return false;
+        } while (!cursor.empty());
     }
     return true;
 }
@@ -184,10 +208,23 @@ bool OneDriveBackend::MoveItem(const std::string& root, const CloudItem& src_ite
                                const std::string& tok, std::string& err) {
     std::string url = "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_item.id;
     std::string body = "{\"name\":\"" + JsonUtil::EscapeJsonString(dst_name) +
-                       "\",\"parentReference\":{\"id\":\"" + dst_parent.id + "\"}}";
+                       "\",\"parentReference\":{\"id\":\"" +
+                       JsonUtil::EscapeJsonString(dst_parent.id) + "\"}}";
     auto resp = http_.Patch(url, tok, body);
     if (!resp.ok()) {
         err = "move failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
+bool OneDriveBackend::AbortUpload(const CloudUploadSession& session, const std::string& tok,
+                                  std::string& err) {
+    if (session.upload_url.empty())
+        return true;
+    auto resp = http_.Delete(session.upload_url, tok);
+    if (resp.status != 204 && resp.status != 404) {
+        err = "abort upload failed (" + std::to_string(resp.status) + ")";
         return false;
     }
     return true;

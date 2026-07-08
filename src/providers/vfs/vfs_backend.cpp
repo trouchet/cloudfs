@@ -159,6 +159,49 @@ bool VFSBackend::MoveItem(const std::string& root, const CloudItem& src_item,
     return true;
 }
 
+bool VFSBackend::ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                                     const std::string& token,
+                                     const std::function<void(const CloudItem&)>& cb,
+                                     std::string& err) {
+    // VFS agent supports ?recursive=true: returns all descendants in a single paged call.
+    std::string cursor;
+    bool first_call = true;
+    do {
+        std::string url;
+        if (first_call) {
+            url = root + "/v1/list?" +
+                  UrlUtil::BuildQuery({{"path", folder_id}, {"recursive", "true"}});
+            first_call = false;
+        } else {
+            url = root + "/v1/list?" + UrlUtil::BuildQuery({{"cursor", cursor}});
+        }
+        auto resp = http_.Get(url, token);
+        if (!resp.ok()) {
+            err = "list recursive failed (" + std::to_string(resp.status) + ")";
+            return false;
+        }
+        for (auto& j : JsonUtil::GetArray(resp.body, "items"))
+            cb(ParseItem(j));
+        cursor = JsonUtil::GetString(resp.body, "next_cursor");
+    } while (!cursor.empty());
+    return true;
+}
+
+bool VFSBackend::AbortUpload(const CloudUploadSession& session, const std::string& token,
+                             std::string& err) {
+    if (session.item_id.empty() || session.upload_url.empty())
+        return true;
+    // upload_url = agent root, item_id = session_id
+    std::string url = session.upload_url + "/v1/upload/abort?" +
+                      UrlUtil::BuildQuery({{"session", session.item_id}});
+    auto resp = http_.Delete(url, token);
+    if (resp.status != 204 && resp.status != 200 && resp.status != 404) {
+        err = "abort upload failed (" + std::to_string(resp.status) + ")";
+        return false;
+    }
+    return true;
+}
+
 bool VFSBackend::Ping(const std::string& root, const std::string& token, std::string& out_version,
                       std::string& err) {
     auto resp = http_.Get(root + "/v1/ping", token);

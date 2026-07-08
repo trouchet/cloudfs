@@ -81,6 +81,15 @@ class OneDriveBackend : public ICloudBackend {
     bool MoveItem(const std::string& root, const CloudItem& src_item, const CloudItem& dst_parent,
                   const std::string& dst_name, const std::string& token, std::string& err) override;
 
+    // Microsoft Graph has no recursive-list API; override with BFS for explicit control.
+    bool ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                             const std::string& token,
+                             const std::function<void(const CloudItem&)>& cb,
+                             std::string& err) override;
+
+    bool AbortUpload(const CloudUploadSession& session, const std::string& token,
+                     std::string& err) override;
+
   private:
     // Builds the Graph API base URL for a given root
     // root="me"          → https://graph.microsoft.com/v1.0/me/drive

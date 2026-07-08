@@ -103,6 +103,20 @@ class SFTPBackend : public ICloudBackend {
     bool MoveItem(const std::string& root, const CloudItem& src_item, const CloudItem& dst_parent,
                   const std::string& dst_name, const std::string& token, std::string& err) override;
 
+    // SFTP protocol has no server-side copy; implement as client-side read+write.
+    bool CopyItem(const std::string& root, const std::string& src_id,
+                  const std::string& dst_parent_id, const std::string& dst_name,
+                  const std::string& token, std::string& err) override;
+
+    // SFTP has no recursive-list command; override with explicit BFS.
+    bool ListFolderRecursive(const std::string& root, const std::string& folder_id,
+                             const std::string& token,
+                             const std::function<void(const CloudItem&)>& cb,
+                             std::string& err) override;
+    bool AbortUpload(const CloudUploadSession& session, const std::string& token,
+                     std::string& err) override;
+                     std::string& err) override;
+
   private:
     // Get or create an SSH+SFTP connection for a given root ("user@host:port")
     SSHConnection& GetConnection(const std::string& root,

@@ -323,10 +323,13 @@ void CloudFileSystem::FlushWrite(CloudFileHandle& h) {
     for (int64_t offset = 0; offset < total; offset += chunk) {
         int64_t sz = std::min(chunk, total - offset);
         bool last = (offset + sz >= total);
-        Throw(!h.backend.UploadChunk(h.upload_session, h.write_buffer.data() + offset, offset, sz,
-                                     last, tok, err)
-                  ? "cloudfs upload: " + err
-                  : "");
+        if (!h.backend.UploadChunk(h.upload_session, h.write_buffer.data() + offset, offset, sz,
+                                   last, tok, err)) {
+            // Clean up the server-side upload session before propagating the error
+            std::string abort_err;
+            h.backend.AbortUpload(h.upload_session, tok, abort_err);
+            Throw("cloudfs upload: " + err);
+        }
     }
     h.upload_active = false;
     h.write_buffer.clear();
@@ -522,6 +525,26 @@ void CloudFileSystem::GlobRecursive(ICloudBackend& backend, const std::string& r
                                     const std::string& folder_id, const std::string& scheme_prefix,
                                     const std::string& file_pattern, bool recursive,
                                     vector<OpenFileInfo>& results, const std::string& tok) {
+    // Fast path: backend has a native recursive list and items carry a full path.
+    // Derive scheme root ("scheme://authority") from scheme_prefix to build result URLs.
+    if (recursive && backend.Capabilities().supports_recursive_list) {
+        const std::string pfx = backend.Scheme() + "://";
+        size_t auth_end = scheme_prefix.find('/', pfx.size());
+        std::string scheme_base =
+            (auth_end != std::string::npos) ? scheme_prefix.substr(0, auth_end) : scheme_prefix;
+        std::string err;
+        backend.ListFolderRecursive(
+            root_id, folder_id, tok,
+            [&](const CloudItem& c) {
+                if (c.is_folder || c.path.empty())
+                    return;
+                if (glob_match(file_pattern.c_str(), c.name.c_str()) == 0)
+                    results.emplace_back(scheme_base + c.path);
+            },
+            err);
+        return;
+    }
+    // Default path: iterate with ListFolder, recurse manually for subdirectories.
     std::string cursor, err;
     do {
         std::vector<CloudItem> batch;
