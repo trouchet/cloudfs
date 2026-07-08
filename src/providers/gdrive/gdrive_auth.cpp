@@ -192,7 +192,7 @@ bool GDriveServiceAccountAuth::AcquireToken(std::string& err) {
     }
     // grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer (URL-encoded)
     std::string body =
-        "grant_type=urn%3Aietf%3Aparams%3Aoauth2%3Agrant-type%3Ajwt-bearer"
+        "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"
         "&assertion=" + jwt;
     std::string resp = PostForm("https://oauth2.googleapis.com/token", body, err);
     if (resp.empty()) return false;
