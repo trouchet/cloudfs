@@ -70,4 +70,46 @@ bool OneDriveAuth::RefreshToken(std::string& err) {
     return !token_.access_token.empty();
 }
 
+// ─── OneDriveClientCredentialsAuth ───────────────────────────────────────────────────────────
+bool OneDriveClientCredentialsAuth::AcquireToken(std::string& err) {
+    auto form_enc = [](const std::string& s) {
+        static const char hex[] = "0123456789ABCDEF";
+        std::string o;
+        o.reserve(s.size());
+        for (unsigned char c : s) {
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                c == '-' || c == '_' || c == '.' || c == '~') {
+                o += static_cast<char>(c);
+            } else if (c == ' ') {
+                o += '+';
+            } else {
+                o += '%';
+                o += hex[c >> 4];
+                o += hex[c & 15];
+            }
+        }
+        return o;
+    };
+    std::string url = "https://login.microsoftonline.com/" + tenant_id_ + "/oauth2/v2.0/token";
+    std::string body = "client_id=" + form_enc(client_id_) +
+                       "&client_secret=" + form_enc(client_secret_) + "&scope=" + form_enc(scope_) +
+                       "&grant_type=client_credentials";
+    std::string resp = PostForm(url, body, err);
+    if (resp.empty())
+        return false;
+    std::string ec = JsonGet(resp, "error");
+    if (!ec.empty()) {
+        err = "onedrive client_credentials: " + ec + " — " + JsonGet(resp, "error_description");
+        return false;
+    }
+    std::string at = JsonGet(resp, "access_token");
+    if (at.empty()) {
+        err = "onedrive client_credentials: no access_token in response";
+        return false;
+    }
+    // Client credentials tokens have no refresh token; store empty string
+    token_.SetFromResponse(at, "", std::max(JsonGetInt(resp, "expires_in"), 3600));
+    return true;
+}
+
 } // namespace duckdb

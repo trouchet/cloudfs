@@ -56,6 +56,13 @@ static void LoadInternal(ExtensionLoader& loader) {
     g_cfs->RegisterBackend(make_uniq<VFSBackend>(g_cfs->GetHttpClient()));
 
     // ── 3. Register secret types for each provider ────────────────────────────
+    // sharepoint: oauth, token, client_credentials (3)
+    // onedrive:   oauth, token, client_credentials (3)
+    // gdrive:     oauth, service_account, token    (3)
+    // dropbox:    oauth, token                     (2)
+    // sftp:       keyfile, agent, password         (3)
+    // vfs:        token                            (1)
+    // Total: 15 slots (max 16)
 
     // SharePoint — oauth (Device Code) + token (static)
     CloudSecretRegistry::Register(
@@ -82,6 +89,31 @@ static void LoadInternal(ExtensionLoader& loader) {
             cfs.SetAuth("spfs", std::make_shared<StaticTokenAuth>("sharepoint", tok));
         });
 
+    CloudSecretRegistry::Register(
+        loader, *g_cfs, "sharepoint", "client_credentials",
+        {"tenant_id", "client_id", "client_secret", "scope"},
+        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
+            auto get = [&](const std::string& k) {
+                auto it = in.options.find(k);
+                return it == in.options.end() ? "" : it->second.ToString();
+            };
+            auto tid = get("tenant_id");
+            auto cid = get("client_id");
+            auto csec = get("client_secret");
+            if (tid.empty())
+                throw InvalidInputException("sharepoint client_credentials: TENANT_ID required");
+            if (cid.empty())
+                throw InvalidInputException("sharepoint client_credentials: CLIENT_ID required");
+            if (csec.empty())
+                throw InvalidInputException(
+                    "sharepoint client_credentials: CLIENT_SECRET required");
+            auto scope = get("scope");
+            if (scope.empty())
+                scope = "https://graph.microsoft.com/.default";
+            cfs.SetAuth("spfs",
+                        std::make_shared<SharePointClientCredentialsAuth>(tid, cid, csec, scope));
+        });
+
     // OneDrive — oauth + token
     CloudSecretRegistry::Register(
         loader, *g_cfs, "onedrive", "oauth", {"tenant_id", "client_id"},
@@ -104,6 +136,30 @@ static void LoadInternal(ExtensionLoader& loader) {
             if (tok.empty())
                 throw InvalidInputException("onedrive token: TOKEN required");
             cfs.SetAuth("odfs", std::make_shared<StaticTokenAuth>("onedrive", tok));
+        });
+
+    CloudSecretRegistry::Register(
+        loader, *g_cfs, "onedrive", "client_credentials",
+        {"tenant_id", "client_id", "client_secret", "scope"},
+        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
+            auto get = [&](const std::string& k) {
+                auto it = in.options.find(k);
+                return it == in.options.end() ? "" : it->second.ToString();
+            };
+            auto tid = get("tenant_id");
+            auto cid = get("client_id");
+            auto csec = get("client_secret");
+            if (tid.empty())
+                throw InvalidInputException("onedrive client_credentials: TENANT_ID required");
+            if (cid.empty())
+                throw InvalidInputException("onedrive client_credentials: CLIENT_ID required");
+            if (csec.empty())
+                throw InvalidInputException("onedrive client_credentials: CLIENT_SECRET required");
+            auto scope = get("scope");
+            if (scope.empty())
+                scope = "https://graph.microsoft.com/.default";
+            cfs.SetAuth("odfs",
+                        std::make_shared<OneDriveClientCredentialsAuth>(tid, cid, csec, scope));
         });
 
     // Google Drive — oauth (user PKCE) + service_account (JWT)

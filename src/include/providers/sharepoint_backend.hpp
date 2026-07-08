@@ -118,4 +118,26 @@ class SharePointDeviceCodeAuth : public OAuth2AuthBase {
     std::string tenant_id_, client_id_, scope_;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SharePointClientCredentialsAuth
+// OAuth2 Client Credentials grant for server-to-server authentication.
+// Best for CI/CD, cron jobs, and API services (no user interaction required).
+// ─────────────────────────────────────────────────────────────────────────────
+class SharePointClientCredentialsAuth : public OAuth2AuthBase {
+  public:
+    SharePointClientCredentialsAuth(std::string tenant_id, std::string client_id,
+                                    std::string client_secret, std::string scope)
+        : OAuth2AuthBase("sharepoint"), tenant_id_(std::move(tenant_id)),
+          client_id_(std::move(client_id)), client_secret_(std::move(client_secret)),
+          scope_(std::move(scope)) {}
+
+  protected:
+    bool AcquireToken(std::string& err) override;
+    // Client credentials tokens are short-lived; re-acquire instead of refresh
+    bool RefreshToken(std::string& err) override { return AcquireToken(err); }
+
+  private:
+    std::string tenant_id_, client_id_, client_secret_, scope_;
+};
+
 } // namespace duckdb

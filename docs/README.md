@@ -5,8 +5,9 @@ Welcome to CloudFS documentation! Choose your path:
 ## 🆕 Getting Started (START HERE!)
 
 **First time using CloudFS?**
+
 1. Read [START_HERE.md](START_HERE.md) - Quick start in 2 minutes ⭐
-2. Then [SETUP_GUIDE.md](SETUP_GUIDE.md) - Comprehensive setup
+1. Then [SETUP_GUIDE.md](SETUP_GUIDE.md) - Comprehensive setup
 
 ## 📖 Documentation by Use Case
 
@@ -14,40 +15,49 @@ Welcome to CloudFS documentation! Choose your path:
 
 - **[Quick Start](START_HERE.md)** - Get up and running in 2 minutes
 - **[Setup Guide](SETUP_GUIDE.md)** - Complete setup walkthrough
-- **[SharePoint Integration](QUICKSTART_SHAREPOINT.md)** - SharePoint provider examples
+- **[SharePoint Integration](QUICKSTART_SHAREPOINT.md)** - SharePoint provider
+  examples
 - **[Build Instructions](BUILD_QUICKSTART.md)** - Build and troubleshoot
 
 ### Developing & Contributing
 
 - **[Development Guide](DEVELOPMENT.md)** - Development workflow and code style
 - **[How to Contribute](CONTRIBUTING_PT.md)** - Contributing guide (Portuguese)
-- **[Commit Guidelines](COMMIT_PLAN.md)** - Git workflow and conventional commits
+- **[Commit Guidelines](COMMIT_PLAN.md)** - Git workflow and conventional
+  commits
 - **[Commitlint Setup](COMMITLINT_SETUP.md)** - Pre-commit hooks configuration
-- **[Adding a Provider](adding_a_provider.md)** - Implement new cloud storage provider
+- **[Adding a Provider](adding_a_provider.md)** - Implement new cloud storage
+  provider
 
 ### Submitting Patches
 
-- **[Quick Overview](COMO_SUBMETER_PATCHES.md)** - 30-second overview (Portuguese) ⭐
-- **[Detailed Guide](CONTRIBUTING_PT.md)** - Full contribution guide (Portuguese)
-- **[Quick Reference](SUBMIT_PATCH_QUICK_REFERENCE.md)** - Commands & formats cheat sheet
+- **[Quick Overview](COMO_SUBMETER_PATCHES.md)** - 30-second overview
+  (Portuguese) ⭐
+- **[Detailed Guide](CONTRIBUTING_PT.md)** - Full contribution guide
+  (Portuguese)
+- **[Quick Reference](SUBMIT_PATCH_QUICK_REFERENCE.md)** - Commands & formats
+  cheat sheet
 
 ### 🔐 Authentication & Enterprise
 
-- **[Investigation Summary](INVESTIGATION_SUMMARY.md)** - Auth audit results & provider status ⭐ NEW
-- **[Authentication Audit](AUTHENTICATION_AUDIT.md)** - Detailed provider analysis
-- **[Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)** - Fix plan for server-to-server auth
+- **[Investigation Summary](INVESTIGATION_SUMMARY.md)** - Auth audit results &
+  provider status ⭐ NEW
+- **[Authentication Audit](AUTHENTICATION_AUDIT.md)** - Detailed provider
+  analysis
+- **[Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)** - Fix plan for
+  server-to-server auth
 
 ## 🛠️ Helper Scripts
 
 Located in `scripts/` folder at project root:
 
-| Script | Command | Purpose |
-|--------|---------|---------|
-| **Compile** | `scripts/compile_for_current_duckdb.sh` | Auto-compile for your DuckDB version |
-| **Setup** | `scripts/setup_secrets.sh` | Interactive secret/credential setup |
-| **Extract** | `scripts/extract_from_aca.sh` | Extract SharePoint credentials from Azure ACA |
-| **Run** | `scripts/duckdb-cloudfs.sh` | Wrapper to run DuckDB with -unsigned |
-| **Patch** | `scripts/submit_patch.sh` | Guide for submitting patches |
+| Script      | Command                                 | Purpose                                       |
+| ----------- | --------------------------------------- | --------------------------------------------- |
+| **Compile** | `scripts/compile_for_current_duckdb.sh` | Auto-compile for your DuckDB version          |
+| **Setup**   | `scripts/setup_secrets.sh`              | Interactive secret/credential setup           |
+| **Extract** | `scripts/extract_from_aca.sh`           | Extract SharePoint credentials from Azure ACA |
+| **Run**     | `scripts/duckdb-cloudfs.sh`             | Wrapper to run DuckDB with -unsigned          |
+| **Patch**   | `scripts/submit_patch.sh`               | Guide for submitting patches                  |
 
 ## 📚 Documentation Navigation
 
@@ -82,26 +92,29 @@ Choose your path:
 
 ### I want to...
 
-| Task | Read |
-|------|------|
-| Get started quickly | [START_HERE.md](START_HERE.md) |
-| Set up SharePoint access | [SETUP_GUIDE.md](SETUP_GUIDE.md) + [QUICKSTART_SHAREPOINT.md](QUICKSTART_SHAREPOINT.md) |
-| Build from source | [BUILD_QUICKSTART.md](BUILD_QUICKSTART.md) |
-| Contribute code | [CONTRIBUTING_PT.md](CONTRIBUTING_PT.md) |
-| Submit a patch/PR | [COMO_SUBMETER_PATCHES.md](COMO_SUBMETER_PATCHES.md) |
-| Develop a new feature | [DEVELOPMENT.md](DEVELOPMENT.md) |
-| Add a new cloud provider | [adding_a_provider.md](adding_a_provider.md) |
-| Understand commits | [COMMIT_PLAN.md](COMMIT_PLAN.md) |
-| Use CloudFS in automation/CI-CD | [INVESTIGATION_SUMMARY.md](INVESTIGATION_SUMMARY.md) |
-| Implement server-to-server auth | [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) |
+| Task                            | Read                                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------------------- |
+| Get started quickly             | [START_HERE.md](START_HERE.md)                                                          |
+| Set up SharePoint access        | [SETUP_GUIDE.md](SETUP_GUIDE.md) + [QUICKSTART_SHAREPOINT.md](QUICKSTART_SHAREPOINT.md) |
+| Build from source               | [BUILD_QUICKSTART.md](BUILD_QUICKSTART.md)                                              |
+| Contribute code                 | [CONTRIBUTING_PT.md](CONTRIBUTING_PT.md)                                                |
+| Submit a patch/PR               | [COMO_SUBMETER_PATCHES.md](COMO_SUBMETER_PATCHES.md)                                    |
+| Develop a new feature           | [DEVELOPMENT.md](DEVELOPMENT.md)                                                        |
+| Add a new cloud provider        | [adding_a_provider.md](adding_a_provider.md)                                            |
+| Understand commits              | [COMMIT_PLAN.md](COMMIT_PLAN.md)                                                        |
+| Use CloudFS in automation/CI-CD | [INVESTIGATION_SUMMARY.md](INVESTIGATION_SUMMARY.md)                                    |
+| Implement server-to-server auth | [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md)                                  |
 
 ## 🚀 Quick Links
 
 - **[Project Main README](../README.md)** - Project overview
+
 - **[GitHub Repository](https://github.com/trouchet/cloudfs)** - Source code
+
 - **[DuckDB Docs](https://duckdb.org/docs/)** - DuckDB documentation
 
 - [Agent Handover](../AGENT_HANDOVER.md) - Roadmap and tasks
+
 - [Task Status](TASK1_STATUS.md) - Current progress
 
 ______________________________________________________________________

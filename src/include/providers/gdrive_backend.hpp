@@ -143,21 +143,22 @@ class GDriveOAuthProvider : public OAuth2AuthBase {
 // JWT-based auth for service accounts (Google ADC / key file).
 // Best for server-side pipelines and CI/CD.
 // ─────────────────────────────────────────────────────────────────────────────
-class GDriveServiceAccountAuth : public ICloudAuthProvider {
+class GDriveServiceAccountAuth : public OAuth2AuthBase {
   public:
     // key_json: contents of the service account JSON key file
     explicit GDriveServiceAccountAuth(std::string key_json);
 
-    bool GetAccessToken(std::string& out, std::string& err) override;
     std::string ProviderName() const override { return "gdrive-sa"; }
 
+  protected:
+    bool AcquireToken(std::string& err) override;
+    // Service account tokens cannot be refreshed; re-acquire via new JWT
+    bool RefreshToken(std::string& err) override { return AcquireToken(err); }
+
   private:
-    bool RefreshServiceAccountToken(std::string& err);
     std::string SignJWT() const;
 
     std::string project_id_, client_email_, private_key_id_, private_key_;
-    OAuth2TokenBundle token_;
-    std::mutex mu_;
 };
 
 } // namespace duckdb

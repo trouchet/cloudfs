@@ -3,6 +3,11 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <vector>
+
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 
 namespace duckdb {
 
@@ -70,7 +75,8 @@ bool GDriveOAuthProvider::RefreshToken(std::string& err) {
 }
 
 // ─── GDriveServiceAccountAuth ─────────────────────────────────────────────────
-GDriveServiceAccountAuth::GDriveServiceAccountAuth(std::string key_json) {
+GDriveServiceAccountAuth::GDriveServiceAccountAuth(std::string key_json)
+    : OAuth2AuthBase("gdrive-sa") {
     // Parse JSON key file fields (inline helper — no OAuth2AuthBase dependency)
     auto get = [&](const std::string& k) -> std::string {
         auto search = "\"" + k + "\"";
@@ -105,31 +111,110 @@ GDriveServiceAccountAuth::GDriveServiceAccountAuth(std::string key_json) {
         private_key_.replace(p, 2, "\n");
 }
 
-bool GDriveServiceAccountAuth::GetAccessToken(std::string& out, std::string& err) {
-    std::lock_guard<std::mutex> lk(mu_);
-    if (token_.IsValid() && !token_.IsExpiringSoon()) {
-        out = token_.access_token;
-        return true;
+// Base64url encoding helper (RFC 4648 §5, no padding)
+static std::string GDriveBase64Url(const unsigned char* data, size_t len) {
+    static const char tbl[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((len + 2) / 3 * 4);
+    for (size_t i = 0; i < len; i += 3) {
+        uint32_t val = static_cast<uint8_t>(data[i]) << 16;
+        if (i + 1 < len)
+            val |= static_cast<uint8_t>(data[i + 1]) << 8;
+        if (i + 2 < len)
+            val |= static_cast<uint8_t>(data[i + 2]);
+        out += tbl[(val >> 18) & 63];
+        out += tbl[(val >> 12) & 63];
+        out += (i + 1 < len) ? tbl[(val >> 6) & 63] : '=';
+        out += (i + 2 < len) ? tbl[val & 63] : '=';
     }
-    if (!RefreshServiceAccountToken(err))
-        return false;
-    out = token_.access_token;
-    return true;
+    for (auto& c : out) {
+        if (c == '+')
+            c = '-';
+        else if (c == '/')
+            c = '_';
+    }
+    while (!out.empty() && out.back() == '=')
+        out.pop_back();
+    return out;
 }
 
-bool GDriveServiceAccountAuth::RefreshServiceAccountToken(std::string& err) {
-    // Build JWT assertion for service account
-    // For brevity: this calls the Google token endpoint with a signed JWT.
-    // Full implementation requires RSA-SHA256 signing (OpenSSL).
-    // Header: {"alg":"RS256","typ":"JWT","kid":"<private_key_id>"}
-    // Payload: {"iss":"<client_email>","scope":"...","aud":"...","exp":...,"iat":...}
-    // Signature: RSA-SHA256(base64url(header)+"."+base64url(payload), private_key)
-    //
-    // Stub: subclasses or downstream code can provide the signed JWT directly.
-    err = "GDriveServiceAccountAuth: JWT signing not yet implemented in this build. "
-          "Use PROVIDER oauth or pass a pre-obtained token via PROVIDER token.";
-    return false;
-    // TODO: integrate OpenSSL RSA signing via EVP_DigestSign*
+static std::string GDriveBase64UrlStr(const std::string& s) {
+    return GDriveBase64Url(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+}
+
+std::string GDriveServiceAccountAuth::SignJWT() const {
+    using namespace std::chrono;
+    auto now = duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
+
+    std::string header = "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"" + private_key_id_ + "\"}";
+    std::string payload = "{\"iss\":\"" + client_email_ +
+                          "\""
+                          ",\"scope\":\"https://www.googleapis.com/auth/drive\""
+                          ",\"aud\":\"https://oauth2.googleapis.com/token\""
+                          ",\"iat\":" +
+                          std::to_string(now) + ",\"exp\":" + std::to_string(now + 3600) + "}";
+
+    std::string signing_input = GDriveBase64UrlStr(header) + "." + GDriveBase64UrlStr(payload);
+
+    BIO* bio = BIO_new_mem_buf(private_key_.c_str(), static_cast<int>(private_key_.size()));
+    if (!bio)
+        return "";
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!pkey)
+        return "";
+
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    if (!mdctx) {
+        EVP_PKEY_free(pkey);
+        return "";
+    }
+
+    std::string jwt;
+    bool ok = EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) == 1 &&
+              EVP_DigestSignUpdate(mdctx, signing_input.c_str(), signing_input.size()) == 1;
+    if (ok) {
+        size_t sig_len = 0;
+        ok = EVP_DigestSignFinal(mdctx, nullptr, &sig_len) == 1 && sig_len > 0;
+        if (ok) {
+            std::vector<unsigned char> sig(sig_len);
+            ok = EVP_DigestSignFinal(mdctx, sig.data(), &sig_len) == 1;
+            if (ok)
+                jwt = signing_input + "." + GDriveBase64Url(sig.data(), sig_len);
+        }
+    }
+
+    EVP_MD_CTX_free(mdctx);
+    EVP_PKEY_free(pkey);
+    return jwt;
+}
+
+bool GDriveServiceAccountAuth::AcquireToken(std::string& err) {
+    std::string jwt = SignJWT();
+    if (jwt.empty()) {
+        err = "gdrive-sa: JWT signing failed — verify private_key in service account JSON";
+        return false;
+    }
+    // grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer (URL-encoded)
+    std::string body = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"
+                       "&assertion=" +
+                       jwt;
+    std::string resp = PostForm("https://oauth2.googleapis.com/token", body, err);
+    if (resp.empty())
+        return false;
+    std::string ec = JsonGet(resp, "error");
+    if (!ec.empty()) {
+        err = "gdrive-sa: " + ec + " — " + JsonGet(resp, "error_description");
+        return false;
+    }
+    std::string at = JsonGet(resp, "access_token");
+    if (at.empty()) {
+        err = "gdrive-sa: no access_token in response";
+        return false;
+    }
+    token_.SetFromResponse(at, "", std::max(JsonGetInt(resp, "expires_in"), 3600));
+    std::cerr << "[cloudfs Google Drive] Service account authenticated.\n";
+    return true;
 }
 
 } // namespace duckdb

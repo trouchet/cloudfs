@@ -13,7 +13,7 @@
 - [ ] Abra Pull Request no repositório principal
 - [ ] Aguarde code review
 
----
+______________________________________________________________________
 
 ## 🚀 Passo-a-Passo Completo
 
@@ -84,6 +84,7 @@ EOF
 ### 5️⃣ Commit com Mensagem Correta
 
 **Formato obrigatório:**
+
 ```
 <tipo>(<escopo>): <assunto>
 
@@ -114,6 +115,7 @@ need regeneration."
 ```
 
 **Tipos válidos:**
+
 - `feat` - Nova feature
 - `fix` - Correção de bug
 - `docs` - Documentação
@@ -126,6 +128,7 @@ need regeneration."
 - `chore` - Manutenção
 
 **Escopos válidos:**
+
 - `sharepoint`, `onedrive`, `gdrive`, `dropbox`, `sftp`, `vfs`
 - `auth`, `cache`, `core`, `table-functions`, `http`
 - `extension`, `agent`, `build`, `deps`, `docs`
@@ -170,7 +173,7 @@ Breve descrição do que foi mudado e por quê.
 Closes #123
 ```
 
----
+______________________________________________________________________
 
 ## 🚨 Problemas Comuns
 
@@ -234,22 +237,25 @@ git rebase --continue
 git push -f origin seu-branch
 ```
 
----
+______________________________________________________________________
 
 ## 📊 CI/CD Automático
 
 Quando você abre um PR, o GitHub automaticamente:
 
 ✅ **Testa em múltiplas plataformas:**
+
 - Linux (gcc/clang)
 - macOS (clang)
 - Windows (MSVC)
 
 ✅ **Testa em múltiplas versões do DuckDB:**
+
 - v1.5.4 (estável)
 - Outras versões conforme necessário
 
 ✅ **Executa verificações:**
+
 - Code formatting (clang-format)
 - Linting (shellcheck, pylint, etc)
 - Testes unitários
@@ -257,7 +263,7 @@ Quando você abre um PR, o GitHub automaticamente:
 
 ❌ Se algo falhar, você receberá feedback. Faça as correções e push novamente.
 
----
+______________________________________________________________________
 
 ## 🎁 Exemplo Prático: Adicionar Client Credentials
 
@@ -298,7 +304,7 @@ git push origin feat/sharepoint-client-credentials
 # Abrir PR no GitHub
 ```
 
----
+______________________________________________________________________
 
 ## 📚 Recursos Úteis
 
@@ -307,7 +313,7 @@ git push origin feat/sharepoint-client-credentials
 - [Build Quickstart](docs/BUILD_QUICKSTART.md)
 - [CloudFS Features](README.md)
 
----
+______________________________________________________________________
 
 ## ❓ Dúvidas?
 

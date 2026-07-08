@@ -102,7 +102,7 @@ if [ -f "patch_client_credentials.diff" ]; then
     echo ""
     echo "Aplicar patch? (s/n)"
     read -r apply_patch
-    
+
     if [[ "$apply_patch" == "s" || "$apply_patch" == "S" ]]; then
         echo "Aplicando patch..."
         patch -p1 < patch_client_credentials.diff || {
@@ -214,7 +214,7 @@ Usage:
     TENANT_ID '...',
     AUTH_FLOW 'client_credentials'
   );"
-    
+
     echo "✅ Commit criado!"
 else
     echo "❌ Commit cancelado"
@@ -253,8 +253,8 @@ echo ""
 echo "2️⃣  Use o template de PR:"
 cat << 'PR_TEMPLATE'
 ## 📝 Descrição
-Implementa suporte a OAuth2 Client Credentials flow para autenticação 
-no SharePoint. Permite autenticação service-to-service sem interação 
+Implementa suporte a OAuth2 Client Credentials flow para autenticação
+no SharePoint. Permite autenticação service-to-service sem interação
 do usuário, ideal para aplicações headless.
 
 ## 🎯 Tipo de Mudança

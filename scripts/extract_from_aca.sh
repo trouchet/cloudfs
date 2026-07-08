@@ -63,7 +63,7 @@ case $choice in
   1)
     echo ""
     echo "💾 Criando ~/.env.sharepoint..."
-    
+
     cat > ~/.env.sharepoint << ENVEOF
 # SharePoint Configuration from ACA concilium-api
 # Extraído em $(date)
@@ -74,7 +74,7 @@ export CLOUDFS_SHAREPOINT_CLIENT_SECRET="$CLIENT_SECRET"
 export CLOUDFS_SHAREPOINT_DRIVE_ID="$DRIVE_ID"
 export CLOUDFS_SHAREPOINT_ROOT_PATH="$ROOT_PATH"
 ENVEOF
-    
+
     chmod 600 ~/.env.sharepoint
     echo "✅ Arquivo criado: ~/.env.sharepoint (permissões: 600)"
     echo ""
@@ -82,30 +82,30 @@ ENVEOF
     echo "  source ~/.env.sharepoint"
     echo "  duckdb-cloudfs"
     ;;
-  
+
   2)
     echo ""
     echo "📤 Enviando para GitHub Secrets..."
-    
+
     echo -n "  CLOUDFS_SHAREPOINT_TENANT_ID... "
     gh secret set CLOUDFS_SHAREPOINT_TENANT_ID --body "$TENANT_ID" && echo "✅" || echo "❌"
-    
+
     echo -n "  CLOUDFS_SHAREPOINT_CLIENT_ID... "
     gh secret set CLOUDFS_SHAREPOINT_CLIENT_ID --body "$CLIENT_ID" && echo "✅" || echo "❌"
-    
+
     echo -n "  CLOUDFS_SHAREPOINT_CLIENT_SECRET... "
     gh secret set CLOUDFS_SHAREPOINT_CLIENT_SECRET --body "$CLIENT_SECRET" && echo "✅" || echo "❌"
-    
+
     echo -n "  CLOUDFS_SHAREPOINT_DRIVE_ID... "
     gh secret set CLOUDFS_SHAREPOINT_DRIVE_ID --body "$DRIVE_ID" && echo "✅" || echo "❌"
-    
+
     echo -n "  CLOUDFS_SHAREPOINT_ROOT_PATH... "
     gh variable set CLOUDFS_SHAREPOINT_ROOT_PATH --body "$ROOT_PATH" && echo "✅" || echo "❌"
-    
+
     echo ""
     echo "✅ Secrets enviados para GitHub!"
     ;;
-  
+
   3)
     echo ""
     echo "👁️  Valores:"
@@ -125,7 +125,7 @@ ENVEOF
     echo "  ROOT_PATH:"
     echo "    $ROOT_PATH"
     ;;
-  
+
   *)
     echo "❌ Opção inválida"
     exit 1
