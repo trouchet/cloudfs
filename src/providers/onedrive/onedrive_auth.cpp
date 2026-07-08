@@ -90,11 +90,9 @@ bool OneDriveClientCredentialsAuth::AcquireToken(std::string& err) {
         }
         return o;
     };
-    std::string url =
-        "https://login.microsoftonline.com/" + tenant_id_ + "/oauth2/v2.0/token";
+    std::string url = "https://login.microsoftonline.com/" + tenant_id_ + "/oauth2/v2.0/token";
     std::string body = "client_id=" + form_enc(client_id_) +
-                       "&client_secret=" + form_enc(client_secret_) +
-                       "&scope=" + form_enc(scope_) +
+                       "&client_secret=" + form_enc(client_secret_) + "&scope=" + form_enc(scope_) +
                        "&grant_type=client_credentials";
     std::string resp = PostForm(url, body, err);
     if (resp.empty())

@@ -105,7 +105,8 @@ static void LoadInternal(ExtensionLoader& loader) {
             if (cid.empty())
                 throw InvalidInputException("sharepoint client_credentials: CLIENT_ID required");
             if (csec.empty())
-                throw InvalidInputException("sharepoint client_credentials: CLIENT_SECRET required");
+                throw InvalidInputException(
+                    "sharepoint client_credentials: CLIENT_SECRET required");
             auto scope = get("scope");
             if (scope.empty())
                 scope = "https://graph.microsoft.com/.default";

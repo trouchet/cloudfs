@@ -117,8 +117,8 @@ echo -e "${BOLD}5. Checking code formatting...${NC}"
 
 if command -v clang-format &> /dev/null; then
     # Find C++ files that need formatting
-    UNFORMATTED=$(find src -name '*.cpp' -o -name '*.hpp' 2>/dev/null | \
-                  xargs clang-format --dry-run --Werror 2>&1 || true)
+    UNFORMATTED=$(find src \( -name '*.cpp' -o -name '*.hpp' \) -print0 2>/dev/null | \
+                  xargs -0 clang-format --dry-run --Werror 2>&1 || true)
 
     if [ -z "$UNFORMATTED" ]; then
         echo -e "${GREEN}✓${NC} All C++ files are properly formatted"

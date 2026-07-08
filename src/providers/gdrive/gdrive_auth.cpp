@@ -113,24 +113,28 @@ GDriveServiceAccountAuth::GDriveServiceAccountAuth(std::string key_json)
 
 // Base64url encoding helper (RFC 4648 §5, no padding)
 static std::string GDriveBase64Url(const unsigned char* data, size_t len) {
-    static const char tbl[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static const char tbl[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string out;
     out.reserve((len + 2) / 3 * 4);
     for (size_t i = 0; i < len; i += 3) {
         uint32_t val = static_cast<uint8_t>(data[i]) << 16;
-        if (i + 1 < len) val |= static_cast<uint8_t>(data[i + 1]) << 8;
-        if (i + 2 < len) val |= static_cast<uint8_t>(data[i + 2]);
+        if (i + 1 < len)
+            val |= static_cast<uint8_t>(data[i + 1]) << 8;
+        if (i + 2 < len)
+            val |= static_cast<uint8_t>(data[i + 2]);
         out += tbl[(val >> 18) & 63];
         out += tbl[(val >> 12) & 63];
         out += (i + 1 < len) ? tbl[(val >> 6) & 63] : '=';
         out += (i + 2 < len) ? tbl[val & 63] : '=';
     }
     for (auto& c : out) {
-        if (c == '+') c = '-';
-        else if (c == '/') c = '_';
+        if (c == '+')
+            c = '-';
+        else if (c == '/')
+            c = '_';
     }
-    while (!out.empty() && out.back() == '=') out.pop_back();
+    while (!out.empty() && out.back() == '=')
+        out.pop_back();
     return out;
 }
 
@@ -142,22 +146,23 @@ std::string GDriveServiceAccountAuth::SignJWT() const {
     using namespace std::chrono;
     auto now = duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
 
-    std::string header =
-        "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"" + private_key_id_ + "\"}";
-    std::string payload =
-        "{\"iss\":\"" + client_email_ + "\""
-        ",\"scope\":\"https://www.googleapis.com/auth/drive\""
-        ",\"aud\":\"https://oauth2.googleapis.com/token\""
-        ",\"iat\":" + std::to_string(now) +
-        ",\"exp\":" + std::to_string(now + 3600) + "}";
+    std::string header = "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"" + private_key_id_ + "\"}";
+    std::string payload = "{\"iss\":\"" + client_email_ +
+                          "\""
+                          ",\"scope\":\"https://www.googleapis.com/auth/drive\""
+                          ",\"aud\":\"https://oauth2.googleapis.com/token\""
+                          ",\"iat\":" +
+                          std::to_string(now) + ",\"exp\":" + std::to_string(now + 3600) + "}";
 
     std::string signing_input = GDriveBase64UrlStr(header) + "." + GDriveBase64UrlStr(payload);
 
     BIO* bio = BIO_new_mem_buf(private_key_.c_str(), static_cast<int>(private_key_.size()));
-    if (!bio) return "";
+    if (!bio)
+        return "";
     EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
     BIO_free(bio);
-    if (!pkey) return "";
+    if (!pkey)
+        return "";
 
     EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
     if (!mdctx) {
@@ -191,11 +196,12 @@ bool GDriveServiceAccountAuth::AcquireToken(std::string& err) {
         return false;
     }
     // grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer (URL-encoded)
-    std::string body =
-        "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"
-        "&assertion=" + jwt;
+    std::string body = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"
+                       "&assertion=" +
+                       jwt;
     std::string resp = PostForm("https://oauth2.googleapis.com/token", body, err);
-    if (resp.empty()) return false;
+    if (resp.empty())
+        return false;
     std::string ec = JsonGet(resp, "error");
     if (!ec.empty()) {
         err = "gdrive-sa: " + ec + " — " + JsonGet(resp, "error_description");
