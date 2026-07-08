@@ -101,7 +101,8 @@ static bool ParseRoot(const std::string& root, std::string& out_user, std::strin
 }
 
 static socket_fd_t ConnectSocket(const std::string& host, int port, std::string& err) {
-    struct addrinfo hints{}, *res = nullptr;
+    struct addrinfo hints {
+    }, *res = nullptr;
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     std::string port_str = std::to_string(port);
