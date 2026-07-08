@@ -368,5 +368,3 @@ export CLOUDFS_SHAREPOINT_TENANT_ID="<your-tenant-id>"
 - OpenSSL EVP: [OpenSSL Documentation](https://www.openssl.org/docs/man1.1.1/man3/EVP_DigestSign.html)
 - Google Service Account JWT: [Google Docs](https://developers.google.com/identity/protocols/oauth2/service-account)
 - Microsoft Identity Platform: [Microsoft Docs](https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow)
-
-

@@ -303,5 +303,3 @@ Before starting implementation:
    - Answer: No (service account tokens don't expire for days)
 4. Error messages for missing credentials?
    - Recommendation: "Client Credentials not configured. Create SECRET with client_secret parameter."
-
-
