@@ -170,10 +170,13 @@ std::string GDriveServiceAccountAuth::SignJWT() const {
               EVP_DigestSignUpdate(mdctx, signing_input.c_str(), signing_input.size()) == 1;
     if (ok) {
         size_t sig_len = 0;
-        EVP_DigestSignFinal(mdctx, nullptr, &sig_len);
-        std::vector<unsigned char> sig(sig_len);
-        if (EVP_DigestSignFinal(mdctx, sig.data(), &sig_len) == 1)
-            jwt = signing_input + "." + GDriveBase64Url(sig.data(), sig_len);
+        ok = EVP_DigestSignFinal(mdctx, nullptr, &sig_len) == 1 && sig_len > 0;
+        if (ok) {
+            std::vector<unsigned char> sig(sig_len);
+            ok = EVP_DigestSignFinal(mdctx, sig.data(), &sig_len) == 1;
+            if (ok)
+                jwt = signing_input + "." + GDriveBase64Url(sig.data(), sig_len);
+        }
     }
 
     EVP_MD_CTX_free(mdctx);
