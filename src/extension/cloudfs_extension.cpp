@@ -156,8 +156,7 @@ static void LoadInternal(ExtensionLoader& loader) {
                 throw InvalidInputException("onedrive client_credentials: CLIENT_SECRET required");
             auto scope = get("scope");
             if (scope.empty())
-                scope = "https://graph.microsoft.com/Files.ReadWrite offline_access";
-            cfs.SetAuth("odfs",
+                scope = "https://graph.microsoft.com/.default";
                         std::make_shared<OneDriveClientCredentialsAuth>(tid, cid, csec, scope));
         });
 
