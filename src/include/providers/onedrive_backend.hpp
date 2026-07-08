@@ -78,9 +78,8 @@ class OneDriveBackend : public ICloudBackend {
                   const std::string& dst_parent_id, const std::string& dst_name,
                   const std::string& token, std::string& err) override;
 
-    bool MoveItem(const std::string& root, const std::string& src_id,
-                  const std::string& dst_parent_id, const std::string& dst_name,
-                  const std::string& token, std::string& err) override;
+    bool MoveItem(const std::string& root, const CloudItem& src_item, const CloudItem& dst_parent,
+                  const std::string& dst_name, const std::string& token, std::string& err) override;
 
   private:
     // Builds the Graph API base URL for a given root

@@ -396,20 +396,20 @@ bool SFTPBackend::CreateFolder(const std::string& root, const std::string& paren
     return true;
 }
 
-bool SFTPBackend::MoveItem(const std::string& root, const std::string& src_id,
-                           const std::string& dst_parent_id, const std::string& dst_name,
+bool SFTPBackend::MoveItem(const std::string& root, const CloudItem& src_item,
+                           const CloudItem& dst_parent, const std::string& dst_name,
                            const std::string& token, std::string& err) {
     auto& conn = GetConnection(root, token, err);
     if (!conn.IsValid())
         return false;
-    std::string dst_path = dst_parent_id + "/" + dst_name;
+    std::string dst_path = dst_parent.id + "/" + dst_name;
     // LIBSSH2_SFTP_RENAME_OVERWRITE allows replacing an existing destination
-    int rc = libssh2_sftp_rename_ex(conn.sftp, src_id.c_str(), (unsigned int)src_id.size(),
-                                    dst_path.c_str(), (unsigned int)dst_path.size(),
-                                    LIBSSH2_SFTP_RENAME_OVERWRITE | LIBSSH2_SFTP_RENAME_ATOMIC |
-                                        LIBSSH2_SFTP_RENAME_NATIVE);
+    int rc = libssh2_sftp_rename_ex(
+        conn.sftp, src_item.id.c_str(), (unsigned int)src_item.id.size(), dst_path.c_str(),
+        (unsigned int)dst_path.size(),
+        LIBSSH2_SFTP_RENAME_OVERWRITE | LIBSSH2_SFTP_RENAME_ATOMIC | LIBSSH2_SFTP_RENAME_NATIVE);
     if (rc != 0) {
-        err = "sftp rename failed: " + src_id + " -> " + dst_path;
+        err = "sftp rename failed: " + src_item.id + " -> " + dst_path;
         return false;
     }
     return true;

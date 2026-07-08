@@ -147,8 +147,8 @@ class ICloudBackend {
     }
 
     // Optional server-side move/rename (avoids delete+re-upload for large files).
-    virtual bool MoveItem(const std::string& root, const std::string& src_item_id,
-                          const std::string& dst_parent_id, const std::string& dst_name,
+    virtual bool MoveItem(const std::string& root, const CloudItem& src_item,
+                          const CloudItem& dst_parent, const std::string& dst_name,
                           const std::string& access_token, std::string& err) {
         err = Name() + ": server-side move not supported";
         return false;

@@ -220,34 +220,46 @@ bool GDriveBackend::CopyItem(const std::string&, const std::string& src_id,
     return true;
 }
 
-bool GDriveBackend::MoveItem(const std::string&, const std::string& src_id,
-                             const std::string& dst_parent_id, const std::string& dst_name,
+bool GDriveBackend::MoveItem(const std::string&, const CloudItem& src_item,
+                             const CloudItem& dst_parent, const std::string& dst_name,
                              const std::string& tok, std::string& err) {
-    // Fetch current parents so we can pass removeParents (avoids duplicates in multi-parent drives)
+    // Fetch current parents so we can remove ALL of them (avoids multi-parent artifacts).
     std::string meta_url =
-        kApiBase + "/files/" + src_id + "?fields=parents&supportsAllDrives=true";
+        kApiBase + "/files/" + src_item.id + "?fields=parents&supportsAllDrives=true";
     auto meta_resp = http_.Get(meta_url, tok);
     if (!meta_resp.ok()) {
         err = "move: failed to fetch file metadata (" + std::to_string(meta_resp.status) + ")";
         return false;
     }
-    // Extract first parent ID from JSON array ["id1","id2",...]
-    std::string old_parent;
-    auto parents_pos = meta_resp.body.find("\"parents\"");
-    if (parents_pos != std::string::npos) {
-        auto arr_start = meta_resp.body.find('[', parents_pos);
-        auto first_q = meta_resp.body.find('"', arr_start + 1);
-        auto second_q = meta_resp.body.find('"', first_q + 1);
-        if (first_q != std::string::npos && second_q != std::string::npos)
-            old_parent = meta_resp.body.substr(first_q + 1, second_q - first_q - 1);
+    // Safely extract all parent IDs from JSON array ["id1","id2",...]
+    std::string remove_parents;
+    {
+        const auto& body = meta_resp.body;
+        auto p_pos = body.find("\"parents\"");
+        auto arr_start = (p_pos != std::string::npos) ? body.find('[', p_pos) : std::string::npos;
+        auto arr_end =
+            (arr_start != std::string::npos) ? body.find(']', arr_start) : std::string::npos;
+        for (size_t i = (arr_start != std::string::npos ? arr_start + 1 : body.size());
+             arr_end != std::string::npos && i < arr_end;) {
+            auto q1 = body.find('"', i);
+            if (q1 == std::string::npos || q1 >= arr_end)
+                break;
+            auto q2 = body.find('"', q1 + 1);
+            if (q2 == std::string::npos || q2 >= arr_end)
+                break;
+            if (!remove_parents.empty())
+                remove_parents += ",";
+            remove_parents += body.substr(q1 + 1, q2 - q1 - 1);
+            i = q2 + 1;
+        }
     }
 
-    std::string url = kApiBase + "/files/" + src_id + "?supportsAllDrives=true";
-    if (!old_parent.empty())
-        url += "&removeParents=" + old_parent;
-    url += "&addParents=" + dst_parent_id;
+    std::string url = kApiBase + "/files/" + src_item.id + "?supportsAllDrives=true";
+    if (!remove_parents.empty())
+        url += "&removeParents=" + remove_parents; // GDrive IDs are safe alphanumeric
+    url += "&addParents=" + dst_parent.id;
 
-    std::string body = "{\"name\":\"" + dst_name + "\"}";
+    std::string body = "{\"name\":\"" + JsonUtil::EscapeJsonString(dst_name) + "\"}";
     auto resp = http_.Patch(url, tok, body);
     if (!resp.ok()) {
         err = "move failed (" + std::to_string(resp.status) + ")";

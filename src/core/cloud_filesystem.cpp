@@ -477,6 +477,9 @@ void CloudFileSystem::MoveFile(const string& src_url, const string& dst_url,
     std::string dst_parent_path =
         (last_slash == std::string::npos || last_slash == 0) ? "/" : dst_path.substr(0, last_slash);
 
+    if (dst_name.empty())
+        Throw("cloudfs: destination path must include a filename, not a directory path");
+
     // Stat the destination parent folder
     CloudItem dst_parent;
     Throw(!b.Stat(root_id, dst_parent_path, tok, dst_parent, err)
@@ -484,7 +487,7 @@ void CloudFileSystem::MoveFile(const string& src_url, const string& dst_url,
               : "");
 
     // Perform server-side move
-    Throw(!b.MoveItem(root_id, src_item.id, dst_parent.id, dst_name, tok, err) ? err : "");
+    Throw(!b.MoveItem(root_id, src_item, dst_parent, dst_name, tok, err) ? err : "");
 
     // Invalidate affected cache entries
     cache_.InvalidateItem(b.Scheme(), src_url);

@@ -278,16 +278,18 @@ bool DropboxBackend::CopyItem(const std::string&, const std::string& src_id,
     return true;
 }
 
-bool DropboxBackend::MoveItem(const std::string&, const std::string& src_id,
-                              const std::string& dst_parent_id, const std::string& dst_name,
+bool DropboxBackend::MoveItem(const std::string&, const CloudItem& src_item,
+                              const CloudItem& dst_parent, const std::string& dst_name,
                               const std::string& tok, std::string& err) {
+    // Dropbox move_v2: from_path accepts opaque Dropbox ID ("id:...") but to_path must be a path.
     HttpRequest req;
     req.method = "POST";
     req.SetBearerAuth(tok);
     req.headers["Content-Type"] = "application/json";
     req.url = std::string(kApiBase) + "/files/move_v2";
-    req.body =
-        "{\"from_path\":\"" + src_id + "\",\"to_path\":\"" + dst_parent_id + "/" + dst_name + "\"}";
+    req.body = "{\"from_path\":\"" + JsonUtil::EscapeJsonString(src_item.path) +
+               "\",\"to_path\":\"" + JsonUtil::EscapeJsonString(dst_parent.path + "/" + dst_name) +
+               "\"}";
     auto resp = http_.Execute(req);
     if (!resp.ok()) {
         err = "move failed " + std::to_string(resp.status);

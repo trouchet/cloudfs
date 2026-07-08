@@ -229,13 +229,12 @@ bool SharePointBackend::CopyItem(const std::string& root, const std::string& src
     return true;
 }
 
-bool SharePointBackend::MoveItem(const std::string& root, const std::string& src_id,
-                                 const std::string& dst_parent_id, const std::string& dst_name,
+bool SharePointBackend::MoveItem(const std::string& root, const CloudItem& src_item,
+                                 const CloudItem& dst_parent, const std::string& dst_name,
                                  const std::string& tok, std::string& err) {
-    std::string url =
-        "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_id;
-    std::string body =
-        "{\"name\":\"" + dst_name + "\",\"parentReference\":{\"id\":\"" + dst_parent_id + "\"}}";
+    std::string url = "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_item.id;
+    std::string body = "{\"name\":\"" + JsonUtil::EscapeJsonString(dst_name) +
+                       "\",\"parentReference\":{\"id\":\"" + dst_parent.id + "\"}}";
     auto resp = http_.Patch(url, tok, body);
     if (!resp.ok()) {
         err = "move failed (" + std::to_string(resp.status) + ")";
