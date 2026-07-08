@@ -173,13 +173,14 @@ bool OneDriveBackend::ListFolderRecursive(const std::string& root, const std::st
     for (size_t i = 0; i < queue.size(); ++i) {
         std::string cursor;
         do {
-            if (!ListFolder(root, queue[i], tok,
-                            [&](const CloudItem& item) {
-                                cb(item);
-                                if (item.is_folder)
-                                    queue.push_back(item.id);
-                            },
-                            cursor, err))
+            if (!ListFolder(
+                    root, queue[i], tok,
+                    [&](const CloudItem& item) {
+                        cb(item);
+                        if (item.is_folder)
+                            queue.push_back(item.id);
+                    },
+                    cursor, err))
                 return false;
         } while (!cursor.empty());
     }

@@ -38,7 +38,8 @@ class GDriveBackend : public ICloudBackend {
         caps.supports_range_reads = true;       // via Range header on alt=media
         caps.supports_resumable_uploads = true; // resumable upload protocol
         caps.supports_server_side_copy = true;  // files.copy API
-        caps.supports_recursive_list = true;   // in ancestors query
+        caps.supports_recursive_list = false;   // ListFolderRecursive is optimised but items lack
+                                                // c.path — GlobRecursive cannot use it yet
         caps.needs_total_size_upfront = false;
         caps.upload_chunk_alignment = 256 * 1024; // 256 KiB (Google requirement)
         caps.min_upload_chunk = 256 * 1024;

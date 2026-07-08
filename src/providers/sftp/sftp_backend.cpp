@@ -320,8 +320,9 @@ bool SFTPBackend::ListFolder(const std::string& root, const std::string& folder_
 bool SFTPBackend::CreateUploadSession(const std::string& root, const std::string& parent_id,
                                       const std::string& name, int64_t, const std::string& token,
                                       CloudUploadSession& out, std::string& err) {
-    // Encode destination path in upload_url field
+    // Encode destination path in upload_url; store root in item_id so AbortUpload can reconnect.
     out.upload_url = parent_id + "/" + name;
+    out.item_id = root;
     out.chunk_size_bytes = 4 * 1024 * 1024; // 4 MiB
     out.total_size_bytes = -1;
     return true;
@@ -417,15 +418,13 @@ bool SFTPBackend::CopyItem(const std::string& root, const std::string& src_id,
     if (!conn.IsValid())
         return false;
     std::string dst_path = dst_parent_id + "/" + dst_name;
-    LIBSSH2_SFTP_HANDLE* rfh =
-        libssh2_sftp_open(conn.sftp, src_id.c_str(), LIBSSH2_FXF_READ, 0);
+    LIBSSH2_SFTP_HANDLE* rfh = libssh2_sftp_open(conn.sftp, src_id.c_str(), LIBSSH2_FXF_READ, 0);
     if (!rfh) {
         err = "sftp copy: cannot open source: " + src_id;
         return false;
     }
     unsigned long wflags = LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_TRUNC;
-    LIBSSH2_SFTP_HANDLE* wfh =
-        libssh2_sftp_open(conn.sftp, dst_path.c_str(), wflags, 0644);
+    LIBSSH2_SFTP_HANDLE* wfh = libssh2_sftp_open(conn.sftp, dst_path.c_str(), wflags, 0644);
     if (!wfh) {
         libssh2_sftp_close(rfh);
         err = "sftp copy: cannot create destination: " + dst_path;
@@ -470,13 +469,14 @@ bool SFTPBackend::ListFolderRecursive(const std::string& root, const std::string
     for (size_t i = 0; i < queue.size(); ++i) {
         std::string cursor;
         do {
-            if (!ListFolder(root, queue[i], token,
-                            [&](const CloudItem& item) {
-                                cb(item);
-                                if (item.is_folder)
-                                    queue.push_back(item.id);
-                            },
-                            cursor, err))
+            if (!ListFolder(
+                    root, queue[i], token,
+                    [&](const CloudItem& item) {
+                        cb(item);
+                        if (item.is_folder)
+                            queue.push_back(item.id);
+                    },
+                    cursor, err))
                 return false;
         } while (!cursor.empty());
     }

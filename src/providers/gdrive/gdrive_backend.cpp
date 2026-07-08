@@ -242,13 +242,12 @@ bool GDriveBackend::ListFolderRecursive(const std::string&, const std::string& f
     // This is O(1) API calls regardless of folder depth vs O(depth) for the default fallback.
     std::string page_token;
     do {
-        std::string url =
-            kApiBase + "/files?q='" + folder_id +
-            "'+in+ancestors+and+trashed=false"
-            "&fields=nextPageToken,files(id,name,size,mimeType,md5Checksum)"
-            "&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1000";
+        std::string url = kApiBase + "/files?q='" + folder_id +
+                          "'+in+ancestors+and+trashed=false"
+                          "&fields=nextPageToken,files(id,name,size,mimeType,md5Checksum)"
+                          "&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1000";
         if (!page_token.empty())
-            url += "&pageToken=" + page_token;
+            url += "&" + UrlUtil::BuildQuery({{"pageToken", page_token}});
 
         auto resp = http_.Get(url, tok);
         if (!resp.ok()) {

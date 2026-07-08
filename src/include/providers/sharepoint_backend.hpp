@@ -82,6 +82,7 @@ class SharePointBackend : public ICloudBackend {
 
     bool AbortUpload(const CloudUploadSession& session, const std::string& token,
                      std::string& err) override;
+
   private:
     // root = "https://tenant.sharepoint.com|/sites/SiteName" → drive_id
     struct SiteInfo {
