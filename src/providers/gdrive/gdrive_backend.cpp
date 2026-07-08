@@ -299,7 +299,7 @@ bool GDriveBackend::ListFolderRecursive(const std::string&, const std::string& f
 
         auto resp = http_.Get(url, tok);
         if (!resp.ok()) {
-            err = "list recursive failed " + std::to_string(resp.status);
+            err = "list recursive failed (" + std::to_string(resp.status) + ")";
             return false;
         }
         for (auto& j : JsonUtil::GetArray(resp.body, "files")) {
