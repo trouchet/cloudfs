@@ -168,8 +168,9 @@ bool OneDriveBackend::CopyItem(const std::string& root, const std::string& src_i
                                const std::string& tok, std::string& err) {
     std::string url =
         "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_id + "/copy";
-    std::string body =
-        "{\"parentReference\":{\"id\":\"" + dst_parent_id + "\"},\"name\":\"" + dst_name + "\"}";
+std::string body =
+    "{\"parentReference\":{\"id\":\"" + JsonUtil::EscapeJsonString(dst_parent_id) +
+    "\"},\"name\":\"" + JsonUtil::EscapeJsonString(dst_name) + "\"}";
     auto resp = http_.Post(url, tok, body);
     if (resp.status != 202) {
         err = "copy failed (" + std::to_string(resp.status) + ")";
