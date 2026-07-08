@@ -157,6 +157,7 @@ static void LoadInternal(ExtensionLoader& loader) {
             auto scope = get("scope");
             if (scope.empty())
                 scope = "https://graph.microsoft.com/.default";
+            cfs.SetAuth("odfs",
                         std::make_shared<OneDriveClientCredentialsAuth>(tid, cid, csec, scope));
         });
 
