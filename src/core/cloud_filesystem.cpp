@@ -471,11 +471,12 @@ void CloudFileSystem::MoveFile(const string& src_url, const string& dst_url,
     Throw(!b.Stat(root_id, src_path, tok, src_item, err) ? "source not found: " + err : "");
 
     // Decompose destination into parent path + filename
-    auto last_slash = dst_path.rfind('/');
-    std::string dst_name =
-        (last_slash == std::string::npos) ? dst_path : dst_path.substr(last_slash + 1);
-    std::string dst_parent_path =
-        (last_slash == std::string::npos || last_slash == 0) ? "/" : dst_path.substr(0, last_slash);
+auto last_slash = dst_path.rfind('/');
+std::string dst_name =
+    (last_slash == std::string::npos) ? dst_path : dst_path.substr(last_slash + 1);
+Throw(dst_name.empty() ? "cloudfs: destination must include a filename" : "");
+std::string dst_parent_path =
+    (last_slash == std::string::npos || last_slash == 0) ? "/" : dst_path.substr(0, last_slash);
 
     if (dst_name.empty())
         Throw("cloudfs: destination path must include a filename, not a directory path");
