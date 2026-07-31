@@ -61,7 +61,7 @@ bool SharePointBackend::ResolveRoot(const std::string& root, const std::string& 
 
     auto resp = http_.Get(site_url, tok);
     if (!resp.ok()) {
-        err = "get site failed (" + std::to_string(resp.status) + "): " + resp.body.substr(0, 200);
+        err = "get site failed (" + resp.StatusLine() + "): " + resp.body.substr(0, 200);
         return false;
     }
     std::string site_id = JsonUtil::GetString(resp.body, "id");
@@ -87,7 +87,7 @@ bool SharePointBackend::Stat(const std::string& root, const std::string& path,
         return false;
     }
     if (!resp.ok()) {
-        err = "stat failed (" + std::to_string(resp.status) + ")";
+        err = "stat failed (" + resp.StatusLine() + ")";
         return false;
     }
     out.id = JsonUtil::GetString(resp.body, "id");
@@ -134,7 +134,7 @@ bool SharePointBackend::ListFolder(const std::string& root, const std::string& f
 
     auto resp = http_.Get(url, tok);
     if (!resp.ok()) {
-        err = "list failed (" + std::to_string(resp.status) + ")";
+        err = "list failed (" + resp.StatusLine() + ")";
         return false;
     }
 
@@ -180,7 +180,7 @@ bool SharePointBackend::UploadChunk(const CloudUploadSession& s, const char* dat
     auto resp = http_.Put(s.upload_url, data, sz, hdrs);
     if (resp.status == 202 || resp.status == 201 || resp.status == 200)
         return true;
-    err = "uploadChunk failed (" + std::to_string(resp.status) + "): " + resp.body.substr(0, 200);
+    err = "uploadChunk failed (" + resp.StatusLine() + "): " + resp.body.substr(0, 200);
     return false;
 }
 
@@ -190,7 +190,7 @@ bool SharePointBackend::DeleteItem(const std::string& root, const std::string& i
     auto resp =
         http_.Delete("https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + id, tok);
     if (resp.status != 204) {
-        err = "delete failed (" + std::to_string(resp.status) + ")";
+        err = "delete failed (" + resp.StatusLine() + ")";
         return false;
     }
     return true;
@@ -223,7 +223,7 @@ bool SharePointBackend::CopyItem(const std::string& root, const std::string& src
         "{\"parentReference\":{\"id\":\"" + dst_parent_id + "\"},\"name\":\"" + dst_name + "\"}";
     auto resp = http_.Post(url, tok, body);
     if (resp.status != 202) {
-        err = "copy failed (" + std::to_string(resp.status) + ")";
+        err = "copy failed (" + resp.StatusLine() + ")";
         return false;
     }
     return true;
@@ -238,7 +238,7 @@ bool SharePointBackend::MoveItem(const std::string& root, const CloudItem& src_i
                        JsonUtil::EscapeJsonString(dst_parent.id) + "\"}}";
     auto resp = http_.Patch(url, tok, body);
     if (!resp.ok()) {
-        err = "move failed (" + std::to_string(resp.status) + ")";
+        err = "move failed (" + resp.StatusLine() + ")";
         return false;
     }
     return true;
@@ -277,7 +277,7 @@ bool SharePointBackend::AbortUpload(const CloudUploadSession& session, const std
     auto resp = http_.Delete(session.upload_url, tok);
     // 204 = cancelled, 404 = already expired/completed — both are fine
     if (resp.status != 204 && resp.status != 404) {
-        err = "abort upload failed (" + std::to_string(resp.status) + ")";
+        err = "abort upload failed (" + resp.StatusLine() + ")";
         return false;
     }
     return true;

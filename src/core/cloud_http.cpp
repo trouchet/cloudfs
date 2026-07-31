@@ -139,7 +139,19 @@ HttpResponse CloudHttpClient::Execute(const HttpRequest& req, const CloudRetryPo
             curl_slist_free_all(hdrs);
         curl_easy_cleanup(c);
 
-        if (rc != CURLE_OK || !ShouldRetry(resp.status, policy))
+        if (rc != CURLE_OK) {
+            resp.error = curl_easy_strerror(rc);
+            // Transport-level failures (DNS, connect, TLS, timeout) are not
+            // in policy.retryable (which only lists HTTP status codes), so
+            // retry them the same way as a retryable HTTP status — a
+            // transient network hiccup shouldn't fail the whole request.
+            if (attempt < policy.max_retries) {
+                WaitForRetry(attempt, policy);
+                continue;
+            }
+            return resp;
+        }
+        if (!ShouldRetry(resp.status, policy))
             return resp;
         if (attempt < policy.max_retries)
             WaitForRetry(attempt, policy);
