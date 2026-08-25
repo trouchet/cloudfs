@@ -59,11 +59,11 @@ struct HttpResponse {
     // the curl transport error when the request never got an HTTP response
     // (status == 0). Use this instead of std::to_string(status) when
     // building user-facing error strings.
-std::string StatusLine() const {
-    if (status == 0 && !error.empty())
-        return std::to_string(status) + " — " + error;
-    return std::to_string(status);
-}
+    std::string StatusLine() const {
+        if (status == 0 && !error.empty())
+            return std::to_string(status) + " — " + error;
+        return std::to_string(status);
+    }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
