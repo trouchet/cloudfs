@@ -52,7 +52,7 @@ repos:
   # C++ Formatting (clang-format)
   # ============================================================================
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v22.1.5
+    rev: v22.1.8
     hooks:
       - id: clang-format
         files: '\.(cpp|hpp|c|h|cc|hh|cxx)$'
@@ -73,7 +73,7 @@ repos:
   # Shell Script Checks
   # ============================================================================
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
         args: ['--severity=warning']
@@ -82,7 +82,7 @@ repos:
   # Markdown Formatting
   # ============================================================================
   - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.22
+    rev: 1.0.0
     hooks:
       - id: mdformat
         args: ['--wrap', '80']
