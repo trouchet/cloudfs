@@ -45,7 +45,7 @@ bool VFSBackend::Stat(const std::string& root, const std::string& path, const st
         return false;
     }
     if (!resp.ok()) {
-        err = "stat failed (" + std::to_string(resp.status) + ")";
+        err = "stat failed (" + resp.StatusLine() + ")";
         return false;
     }
     out = ParseItem(resp.body);
