@@ -52,7 +52,7 @@ repos:
   # C++ Formatting (clang-format)
   # ============================================================================
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v22.1.8
+    rev: v23.1.2
     hooks:
       - id: clang-format
         files: '\.(cpp|hpp|c|h|cc|hh|cxx)$'
@@ -94,7 +94,7 @@ repos:
   # Commit Message Validation (commitlint)
   # ============================================================================
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
-    rev: v9.26.0
+    rev: v9.27.0
     hooks:
       - id: commitlint
         name: commitlint
