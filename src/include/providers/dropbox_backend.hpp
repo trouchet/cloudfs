@@ -33,6 +33,7 @@ class DropboxBackend : public ICloudBackend {
     explicit DropboxBackend(CloudHttpClient& http) : http_(http) {}
 
     std::string Scheme() const override { return "dbxfs"; }
+    std::string SecretType() const override { return "dropbox"; }
     std::string Name() const override { return "Dropbox"; }
 
     ProviderCapabilities Capabilities() const override {

@@ -121,7 +121,10 @@ struct LsBindData : public FunctionData {
 struct LsScanState : public GlobalTableFunctionState {
     // Stack of (folder_id, url_prefix) pairs to visit
     std::vector<std::pair<std::string, std::string>> folder_stack;
-    std::string current_cursor;                            // pagination cursor for current folder
+    std::string current_cursor; // pagination cursor for current folder
+    // Subfolders seen so far in the folder being paged through; pushed onto
+    // folder_stack once its last page has been read.
+    std::vector<std::pair<std::string, std::string>> pending_folders;
     std::vector<std::pair<std::string, CloudItem>> buffer; // pending items to emit
     idx_t buffer_offset = 0;
     bool finished = false;
@@ -129,55 +132,42 @@ struct LsScanState : public GlobalTableFunctionState {
 
 // Fetch one page of items from the current folder and populate buffer/stack
 static void FetchNextBatch(const LsBindData& bind, LsScanState& state) {
-    if (state.folder_stack.empty() && state.current_cursor.empty()) {
+    if (state.folder_stack.empty()) {
         state.finished = true;
         return;
     }
 
-    // If no cursor, pop next folder from stack
-    if (state.current_cursor.empty()) {
-        if (state.folder_stack.empty()) {
-            state.finished = true;
-            return;
-        }
-        // Continue with current folder (cursor will be set by ListFolder)
-    }
-
-    auto [folder_id, url_prefix] = state.folder_stack.back();
+    // Copy: the stack is modified below.
+    const auto frame = state.folder_stack.back();
+    const std::string& folder_id = frame.first;
+    const std::string& url_prefix = frame.second;
     std::string err;
     std::vector<CloudItem> batch;
 
     if (!bind.backend->ListFolder(
             bind.root_id, folder_id, bind.token, [&](const CloudItem& c) { batch.push_back(c); },
-            state.current_cursor, err)) {
-        // Error during listing - mark as finished to avoid infinite loop
-        state.finished = true;
-        return;
-    }
+            state.current_cursor, err))
+        throw IOException("cloudfs: cannot list '" + url_prefix + "': " + err);
 
-    // Process batch: add matching items to buffer, push folders to stack
-    std::vector<std::pair<std::string, std::string>> new_folders;
     for (auto& item : batch) {
         std::string item_url = url_prefix + "/" + item.name;
         bool name_matches = (bind.pattern.empty() || bind.pattern == "*" ||
                              glob_match(bind.pattern.c_str(), item.name.c_str()) == 0);
 
-        if (name_matches || item.is_folder) {
+        if (name_matches || item.is_folder)
             state.buffer.emplace_back(item_url, item);
-        }
 
-        if (item.is_folder && bind.recursive) {
-            new_folders.emplace_back(item.id, item_url);
-        }
+        if (item.is_folder && bind.recursive)
+            state.pending_folders.emplace_back(item.id, item_url);
     }
 
-    // If cursor is empty, we finished this folder - pop it and push children
+    // Last page of this folder: replace it on the stack with its subfolders,
+    // in reverse so they are visited in listing order (depth-first).
     if (state.current_cursor.empty()) {
         state.folder_stack.pop_back();
-        // Push new folders in reverse order (depth-first traversal)
-        for (auto it = new_folders.rbegin(); it != new_folders.rend(); ++it) {
+        for (auto it = state.pending_folders.rbegin(); it != state.pending_folders.rend(); ++it)
             state.folder_stack.push_back(*it);
-        }
+        state.pending_folders.clear();
     }
 }
 
@@ -205,11 +195,10 @@ static unique_ptr<FunctionData> LsBind(ClientContext& ctx, TableFunctionBindInpu
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
-                                    url);
+    if (!cfs->GetRootIdPublic(b, url, raw_root, tok, root_id, err))
+        throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
-        cfs->GetTokenPublic(b->Scheme(), tok, err);
+        cfs->GetTokenPublic(url, tok, err);
 
     // Stat the target to determine if it's a file or folder
     CloudItem target;
@@ -247,8 +236,18 @@ static void LsScan(ClientContext& context, TableFunctionInput& data_p, DataChunk
 
     idx_t count = 0;
 
-    // Emit buffered items first
-    while (state.buffer_offset < state.buffer.size() && count < STANDARD_VECTOR_SIZE) {
+    // Fill the chunk, fetching further pages and folders as the buffer drains.
+    // An empty folder or page yields no rows but is not the end of the scan,
+    // and returning zero rows would be read as end-of-scan by DuckDB.
+    while (count < STANDARD_VECTOR_SIZE) {
+        if (state.buffer_offset >= state.buffer.size()) {
+            if (state.finished)
+                break;
+            state.buffer.clear();
+            state.buffer_offset = 0;
+            FetchNextBatch(bind, state);
+            continue;
+        }
         auto& [item_url, item] = state.buffer[state.buffer_offset];
 
         output.data[0].SetValue(count, Value(item_url));
@@ -274,18 +273,6 @@ static void LsScan(ClientContext& context, TableFunctionInput& data_p, DataChunk
 
         ++count;
         ++state.buffer_offset;
-    }
-
-    // If buffer exhausted, fetch next batch
-    if (state.buffer_offset >= state.buffer.size() && !state.finished) {
-        state.buffer.clear();
-        state.buffer_offset = 0;
-        FetchNextBatch(bind, state);
-
-        // Recursively call to fill output (tail recursion optimized away by compiler)
-        if (!state.buffer.empty() && count < STANDARD_VECTOR_SIZE) {
-            return LsScan(context, data_p, output);
-        }
     }
 
     output.SetCardinality(count);
@@ -340,11 +327,10 @@ static unique_ptr<FunctionData> StatBind(ClientContext&, TableFunctionBindInput&
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
-                                    url);
+    if (!cfs->GetRootIdPublic(b, url, raw_root, tok, root_id, err))
+        throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
-        cfs->GetTokenPublic(b->Scheme(), tok, err);
+        cfs->GetTokenPublic(url, tok, err);
 
     if (b->Stat(root_id, item_path, tok, data->item, err)) {
         data->item_url = url;
@@ -457,12 +443,8 @@ static void ProcessDuFolder(const DuBindData& bind, DuScanState& state) {
 
         if (!bind.backend->ListFolder(
                 bind.root_id, frame.folder_id, bind.token,
-                [&](const CloudItem& c) { batch.push_back(c); }, frame.cursor, err)) {
-            // Error - mark as listed to skip
-            frame.listed = true;
-            frame.cursor.clear();
-            return;
-        }
+                [&](const CloudItem& c) { batch.push_back(c); }, frame.cursor, err))
+            throw IOException("cloudfs: cannot list '" + frame.folder_url + "': " + err);
 
         // Accumulate files and collect subdirs
         for (auto& item : batch) {
@@ -496,10 +478,16 @@ static void ProcessDuFolder(const DuBindData& bind, DuScanState& state) {
         return;
     }
 
-    // All subdirs processed - emit this folder and pop
+    // All subdirs processed - emit this folder, roll its totals up into the
+    // parent (du reports everything beneath a directory) and pop.
     frame.accumulated.directory = frame.folder_url;
-    state.results_buffer.push_back(frame.accumulated);
+    DuRow done = frame.accumulated;
+    state.results_buffer.push_back(done);
     state.stack.pop_back();
+    if (!state.stack.empty()) {
+        state.stack.back().accumulated.file_count += done.file_count;
+        state.stack.back().accumulated.total_size += done.total_size;
+    }
 }
 
 static unique_ptr<FunctionData> DuBind(ClientContext&, TableFunctionBindInput& input,
@@ -524,11 +512,10 @@ static unique_ptr<FunctionData> DuBind(ClientContext&, TableFunctionBindInput& i
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
-                                    url);
+    if (!cfs->GetRootIdPublic(b, url, raw_root, tok, root_id, err))
+        throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
-        cfs->GetTokenPublic(b->Scheme(), tok, err);
+        cfs->GetTokenPublic(url, tok, err);
 
     CloudItem folder;
     if (!b->Stat(root_id, item_path, tok, folder, err))
@@ -561,8 +548,19 @@ static void DuScan(ClientContext&, TableFunctionInput& data_p, DataChunk& output
 
     idx_t count = 0;
 
-    // Emit buffered results first
-    while (state.results_offset < state.results_buffer.size() && count < STANDARD_VECTOR_SIZE) {
+    // Fill the chunk.  Each ProcessDuFolder call advances the traversal by one
+    // step (a page, a descent or a completed folder), so this terminates; most
+    // steps complete no folder, and returning zero rows before the traversal
+    // is done would be read as end-of-scan by DuckDB.
+    while (count < STANDARD_VECTOR_SIZE) {
+        if (state.results_offset >= state.results_buffer.size()) {
+            if (state.finished)
+                break;
+            state.results_buffer.clear();
+            state.results_offset = 0;
+            ProcessDuFolder(bind, state);
+            continue;
+        }
         auto& row = state.results_buffer[state.results_offset];
         output.data[0].SetValue(count, Value(row.directory));
         output.data[1].SetValue(count, Value::BIGINT(row.file_count));
@@ -570,32 +568,6 @@ static void DuScan(ClientContext&, TableFunctionInput& data_p, DataChunk& output
         output.data[3].SetValue(count, Value(PrettySizeImpl(row.total_size)));
         ++count;
         ++state.results_offset;
-    }
-
-    // If buffer exhausted, process more folders
-    while (count < STANDARD_VECTOR_SIZE && !state.finished) {
-        if (state.results_offset >= state.results_buffer.size()) {
-            state.results_buffer.clear();
-            state.results_offset = 0;
-        }
-
-        ProcessDuFolder(bind, state);
-
-        // Emit newly added results
-        while (state.results_offset < state.results_buffer.size() && count < STANDARD_VECTOR_SIZE) {
-            auto& row = state.results_buffer[state.results_offset];
-            output.data[0].SetValue(count, Value(row.directory));
-            output.data[1].SetValue(count, Value::BIGINT(row.file_count));
-            output.data[2].SetValue(count, Value::BIGINT(row.total_size));
-            output.data[3].SetValue(count, Value(PrettySizeImpl(row.total_size)));
-            ++count;
-            ++state.results_offset;
-        }
-
-        // Avoid infinite loop if no progress
-        if (state.results_buffer.empty() && !state.finished) {
-            break;
-        }
     }
 
     output.SetCardinality(count);

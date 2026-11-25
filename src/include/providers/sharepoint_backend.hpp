@@ -21,6 +21,7 @@ class SharePointBackend : public ICloudBackend {
     explicit SharePointBackend(CloudHttpClient& http) : http_(http) {}
 
     std::string Scheme() const override { return "spfs"; }
+    std::string SecretType() const override { return "sharepoint"; }
     std::string Name() const override { return "SharePoint"; }
 
     ProviderCapabilities Capabilities() const override {
@@ -29,7 +30,7 @@ class SharePointBackend : public ICloudBackend {
         caps.supports_resumable_uploads = true;
         caps.supports_server_side_copy = true;
         caps.supports_recursive_list = false;
-        caps.needs_total_size_upfront = false;
+        caps.needs_total_size_upfront = true;     // Content-Range carries the total
         caps.upload_chunk_alignment = 320 * 1024; // 320 KiB required
         caps.min_upload_chunk = 320 * 1024;
         caps.max_upload_chunk = 60 * 1024 * 1024; // 60 MiB

@@ -28,3 +28,55 @@ jobs:
       ci_tools_version: v1.5-variegata
       extension_name: cloudfs
       format_checks: 'format'
+
+  # Fast checks that need neither DuckDB nor a built extension.
+  unit-tests:
+    name: Unit tests (helpers and agent)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The helper tests compile against the yyjson copy vendored by DuckDB.
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Install libcurl headers
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+      - name: Request/response helper tests
+        run: make -C test/cpp
+      - name: Agent tests
+        working-directory: agent
+        run: |
+          go vet ./...
+          go test ./...
+
+  # End-to-end tests through vfs:// against a real cloudfs-agent, using the
+  # extension binary built above and the released DuckDB Python package.
+  # The DuckDB version below must match duckdb_version in duckdb-stable-build.
+  vfs-integration:
+    name: VFS integration tests
+    needs: duckdb-stable-build
+    # Run even if another platform's build failed; the artifact download below
+    # fails on its own when the Linux build is missing.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloudfs-v1.5.4-extension-linux_amd64
+          path: extension-artifact
+      - name: Install DuckDB
+        run: pip install duckdb==1.5.4
+      - name: Run integration tests
+        run: |
+          export CLOUDFS_EXTENSION="$(find extension-artifact -name cloudfs.duckdb_extension | head -n 1)"
+          test -n "$CLOUDFS_EXTENSION"
+          python test/test_suite.py

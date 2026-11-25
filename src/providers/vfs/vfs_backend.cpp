@@ -41,7 +41,7 @@ bool VFSBackend::Stat(const std::string& root, const std::string& path, const st
     std::string url = root + "/v1/stat?" + UrlUtil::BuildQuery({{"path", path}});
     auto resp = http_.Get(url, token);
     if (resp.status == 404) {
-        err = "not found: " + path;
+        err = CloudError::NotFound(path);
         return false;
     }
     if (!resp.ok()) {
@@ -163,23 +163,27 @@ bool VFSBackend::ListFolderRecursive(const std::string& root, const std::string&
                                      const std::string& token,
                                      const std::function<void(const CloudItem&)>& cb,
                                      std::string& err) {
-    // VFS agent supports ?recursive=true: returns all descendants in a single paged call.
+    // The agent lists all descendants with ?recursive=true.  Every page repeats
+    // path and recursive; the cursor is only an offset into that listing.
     std::string cursor;
-    bool first_call = true;
+    bool first_page = true;
     do {
-        std::string url;
-        if (first_call) {
-            url = root + "/v1/list?" +
-                  UrlUtil::BuildQuery({{"path", folder_id}, {"recursive", "true"}});
-            first_call = false;
-        } else {
-            url = root + "/v1/list?" + UrlUtil::BuildQuery({{"cursor", cursor}});
-        }
-        auto resp = http_.Get(url, token);
+        std::vector<std::pair<std::string, std::string>> params = {{"path", folder_id},
+                                                                   {"recursive", "true"}};
+        if (!cursor.empty())
+            params.push_back({"cursor", cursor});
+        auto resp = http_.Get(root + "/v1/list?" + UrlUtil::BuildQuery(params), token);
         if (!resp.ok()) {
-            err = "list recursive failed (" + std::to_string(resp.status) + ")";
+            err = "list recursive failed (" + resp.StatusLine() + ")";
             return false;
         }
+        // Agents older than the recursive listing ignore the parameter and
+        // return immediate children only.  They do not echo "recursive":true,
+        // so fall back to walking the tree folder by folder.
+        if (first_page && !JsonUtil::GetBool(resp.body, "recursive"))
+            return ICloudBackend::ListFolderRecursive(root, folder_id, token, cb, err);
+        first_page = false;
+
         for (auto& j : JsonUtil::GetArray(resp.body, "items"))
             cb(ParseItem(j));
         cursor = JsonUtil::GetString(resp.body, "next_cursor");

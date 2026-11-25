@@ -50,6 +50,7 @@ class SFTPBackend : public ICloudBackend {
     ~SFTPBackend() override;
 
     std::string Scheme() const override { return "sftp"; }
+    std::string SecretType() const override { return "sftp"; }
     std::string Name() const override { return "SFTP"; }
 
     ProviderCapabilities Capabilities() const override {
