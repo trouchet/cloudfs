@@ -6,6 +6,7 @@
 #include "cloud_backend.hpp"
 #include "cloud_cache.hpp"
 #include "cloud_http.hpp"
+#include "cloud_secret.hpp"
 
 #include <memory>
 #include <mutex>
@@ -40,7 +41,7 @@ class CloudFileHandle;
 // ─────────────────────────────────────────────────────────────────────────────
 class CloudFileSystem : public FileSystem {
   public:
-    CloudFileSystem();
+    explicit CloudFileSystem(DatabaseInstance& db);
     ~CloudFileSystem() override;
 
     // ── Backend registry ──────────────────────────────────────────────────────
@@ -48,11 +49,8 @@ class CloudFileSystem : public FileSystem {
     // Register a new provider. Thread-safe; can be called after Load().
     void RegisterBackend(unique_ptr<ICloudBackend> backend);
 
-    // Attach an auth provider to a scheme (called from CREATE SECRET handler).
-    void SetAuth(const std::string& scheme, std::shared_ptr<ICloudAuthProvider> auth);
-
-    // Retrieve auth for a scheme (for diagnostics / secret serialization).
-    std::shared_ptr<ICloudAuthProvider> GetAuth(const std::string& scheme) const;
+    // Secret types / providers and the auth providers built from secrets.
+    CloudSecretRegistry& GetSecrets() { return secrets_; }
 
     // List all registered scheme names.
     std::vector<std::string> RegisteredSchemes() const;
@@ -64,22 +62,21 @@ class CloudFileSystem : public FileSystem {
     // ── Public helpers for table functions ──────────────────────────────
     // Find backend for a URL without throwing
     ICloudBackend* BackendForPublic(const std::string& url) { return BackendForNoThrow(url); }
-    // Resolve root_id for a (backend, raw_root) pair, caching the result
-    bool GetRootIdPublic(ICloudBackend* b, const std::string& raw_root, std::string& out_token,
-                         std::string& out_root_id, std::string& out_err) {
-        if (cache_.GetRootId(b->Scheme(), raw_root, out_root_id)) {
-            GetTokenPublic(b->Scheme(), out_token, out_err);
-            return true;
-        }
-        if (!GetToken(b->Scheme(), out_token, out_err))
+    // Resolve root_id for a URL's (backend, raw_root) pair, caching the result.
+    // Also returns the access token of the secret matching `url`.
+    bool GetRootIdPublic(ICloudBackend* b, const std::string& url, const std::string& raw_root,
+                         std::string& out_token, std::string& out_root_id, std::string& out_err) {
+        if (!GetToken(url, out_token, out_err))
             return false;
+        if (cache_.GetRootId(b->Scheme(), raw_root, out_root_id))
+            return true;
         if (!b->ResolveRoot(raw_root, out_token, out_root_id, out_err))
             return false;
         cache_.PutRootId(b->Scheme(), raw_root, out_root_id);
         return true;
     }
-    bool GetTokenPublic(const std::string& scheme, std::string& out_token, std::string& err) {
-        return GetToken(scheme, out_token, err);
+    bool GetTokenPublic(const std::string& url, std::string& out_token, std::string& err) {
+        return GetToken(url, out_token, err);
     }
 
     // ── DuckDB FileSystem interface ───────────────────────────────────────────
@@ -124,8 +121,8 @@ class CloudFileSystem : public FileSystem {
     ICloudBackend& BackendFor(const std::string& path);
     ICloudBackend* BackendForNoThrow(const std::string& path);
 
-    // Get access token for the scheme in a URL
-    bool GetToken(const std::string& scheme, std::string& out_token, std::string& err);
+    // Get an access token for a URL, using the secret whose scope matches it
+    bool GetToken(const std::string& url, std::string& out_token, std::string& err);
 
     // Resolve path → CloudItem (with cache)
     bool ResolvePath(ICloudBackend& backend, const std::string& url, CloudItem& out_item,
@@ -135,8 +132,23 @@ class CloudFileSystem : public FileSystem {
     bool EnsureDownloadUrl(ICloudBackend& backend, const std::string& root_id, CloudItem& item,
                            const std::string& token, std::string& err);
 
-    // Flush write buffer via upload session
-    void FlushWrite(CloudFileHandle& h);
+  public:
+    // Complete the upload of a handle opened for writing.  Called from
+    // CloudFileHandle::Close(); throws if the upload fails (after aborting it).
+    void FinishUpload(CloudFileHandle& h);
+    // Give up on an upload: release the server-side session and local spool.
+    // Never throws.
+    void AbortUpload(CloudFileHandle& h) noexcept;
+
+  private:
+    // Create the upload session if it does not exist yet.  total = -1 when the
+    // final size is not known.  Sets the handle's chunk size.
+    void EnsureUploadSession(CloudFileHandle& h, int64_t total);
+    // Send one chunk, creating the upload session first if needed.
+    void UploadChunk(CloudFileHandle& h, const char* data, int64_t size, bool last);
+    // Streaming: upload every full chunk currently buffered, keeping at least
+    // one byte back so the final chunk can be flagged as such on close.
+    void UploadFullChunks(CloudFileHandle& h);
 
     // Glob recursive helper
     void GlobRecursive(ICloudBackend& backend, const std::string& root_id,
@@ -145,7 +157,7 @@ class CloudFileSystem : public FileSystem {
                        vector<OpenFileInfo>& results, const std::string& token);
 
     std::unordered_map<std::string, unique_ptr<ICloudBackend>> backends_;
-    std::unordered_map<std::string, std::shared_ptr<ICloudAuthProvider>> auth_map_;
+    CloudSecretRegistry secrets_;
     CloudCache cache_;
     CloudHttpClient http_; // shared HTTP client (all backends may use it)
     mutable std::mutex mu_;
@@ -169,12 +181,35 @@ class CloudFileHandle : public FileHandle {
     CloudItem item;
     FileOpenFlags open_flags;
 
-    // Write state
+    // ── Write state ───────────────────────────────────────────────────────────
+    // Writes are sequential and uploaded as they arrive, so memory use is
+    // bounded by one chunk regardless of file size:
+    //
+    //   streaming  bytes accumulate in write_buffer and every full chunk is
+    //              sent at once; the remainder goes out as the final chunk
+    //              when the handle is closed.
+    //   spooling   backends that must know the total size before the first
+    //              chunk (ProviderCapabilities::needs_total_size_upfront)
+    //              get the bytes written to a local temporary file, which is
+    //              uploaded chunk by chunk on close.
+    //
+    // The upload session is created lazily with the first chunk, so a handle
+    // that fails early leaves nothing behind on the server.
+    bool upload_active = false;   // opened for writing and not yet finalized/aborted
+    bool session_created = false; // CreateUploadSession succeeded
+    std::string upload_parent_id; // destination folder
+    std::string upload_file_name; // destination name
     CloudUploadSession upload_session;
-    std::vector<char> write_buffer;
-    int64_t bytes_written = 0;
+    int64_t chunk_size = 0;         // bytes per non-final chunk (aligned)
+    std::vector<char> write_buffer; // streaming: bytes not yet uploaded
+    int64_t bytes_written = 0;      // total bytes accepted by Write()
+    int64_t bytes_uploaded = 0;     // bytes handed to the backend so far
     int64_t declared_size = -1;
-    bool upload_active = false;
+    bool spooling = false;
+    std::string spool_dir; // where to create the spool file
+    std::string spool_path;
+    unique_ptr<FileSystem> spool_fs;
+    unique_ptr<FileHandle> spool_file;
 
     // Back-reference to the backend that owns this handle
     ICloudBackend& backend;

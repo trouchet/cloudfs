@@ -8,6 +8,35 @@ namespace duckdb {
 
 static const std::string kApiBase = "https://www.googleapis.com/drive/v3";
 
+// A string literal in the Drive query language: single-quoted, with backslash
+// and single quote escaped by a backslash.
+static std::string DriveLiteral(const std::string& s) {
+    std::string out = "'";
+    for (char c : s) {
+        if (c == '\\' || c == '\'')
+            out += '\\';
+        out += c;
+    }
+    return out + "'";
+}
+
+// URL for files.list with query `q`; every parameter is percent-encoded.
+static std::string ListUrl(const std::string& q, const std::string& fields,
+                           const std::string& page_token = "") {
+    std::vector<std::pair<std::string, std::string>> params = {
+        {"q", q},
+        {"fields", fields},
+        {"supportsAllDrives", "true"},
+        {"includeItemsFromAllDrives", "true"},
+        {"pageSize", "1000"}};
+    if (!page_token.empty())
+        params.push_back({"pageToken", page_token});
+    return kApiBase + "/files?" + UrlUtil::BuildQuery(params);
+}
+
+static const char* const kItemFields = "files(id,name,size,mimeType,md5Checksum)";
+static const char* const kPageFields = "nextPageToken,files(id,name,size,mimeType,md5Checksum)";
+
 // URL: gdfs://MyDrive/path/to/file.parquet  or  gdfs://drive/DriveId/path
 bool GDriveBackend::ParseUrl(const std::string& url, std::string& out_root, std::string& out_path,
                              std::string& err) const {
@@ -45,10 +74,10 @@ bool GDriveBackend::ResolvePathWalk(const std::string& start_folder_id,
         bool is_last = (i + 1 == segments.size());
 
         // List children matching this name
-        std::string q_url = kApiBase + "/files?q='" + current_id + "'+in+parents+and+name='" + seg +
-                            "'+and+trashed=false"
-                            "&fields=files(id,name,size,mimeType,md5Checksum)"
-                            "&supportsAllDrives=true&includeItemsFromAllDrives=true";
+        std::string q_url =
+            ListUrl(DriveLiteral(current_id) + " in parents and name = " + DriveLiteral(seg) +
+                        " and trashed = false",
+                    kItemFields);
         auto resp = http_.Get(q_url, tok);
         if (!resp.ok()) {
             err = "walk failed at '" + seg + "': " + std::to_string(resp.status);
@@ -109,12 +138,10 @@ bool GDriveBackend::ListFolder(const std::string& root, const std::string& folde
                                const std::string& tok,
                                const std::function<void(const CloudItem&)>& cb, std::string& cursor,
                                std::string& err) {
+    // `cursor` is the nextPageToken of the previous page; the query must be
+    // repeated unchanged alongside it.
     std::string url =
-        cursor.empty() ? kApiBase + "/files?q='" + folder_id +
-                             "'+in+parents+and+trashed=false"
-                             "&fields=nextPageToken,files(id,name,size,mimeType,md5Checksum)"
-                             "&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1000"
-                       : cursor;
+        ListUrl(DriveLiteral(folder_id) + " in parents and trashed = false", kPageFields, cursor);
     auto resp = http_.Get(url, tok);
     if (!resp.ok()) {
         err = "list failed " + std::to_string(resp.status);
@@ -141,7 +168,8 @@ bool GDriveBackend::CreateUploadSession(const std::string& root, const std::stri
     // Google resumable upload: initiation request
     std::string url = "https://www.googleapis.com/upload/drive/v3/files"
                       "?uploadType=resumable&supportsAllDrives=true";
-    std::string body = "{\"name\":\"" + name + "\",\"parents\":[\"" + parent_id + "\"]}";
+    std::string body =
+        "{\"name\":" + JsonUtil::Quote(name) + ",\"parents\":[" + JsonUtil::Quote(parent_id) + "]}";
 
     HttpRequest req;
     req.method = "POST";
@@ -167,10 +195,15 @@ bool GDriveBackend::CreateUploadSession(const std::string& root, const std::stri
 bool GDriveBackend::UploadChunk(const CloudUploadSession& s, const char* data, int64_t off,
                                 int64_t sz, bool last, const std::string&, std::string& err) {
     std::unordered_map<std::string, std::string> hdrs;
-    int64_t total = last && s.total_size_bytes > 0 ? s.total_size_bytes : -1;
+    // Intermediate chunks may leave the total open ("/*"); the final chunk must
+    // state it.  An empty final chunk has no byte range: "bytes */<total>".
+    const int64_t total = last ? off + sz : -1;
     char cr[96];
-    snprintf(cr, sizeof(cr), "bytes %lld-%lld/%s", (long long)off, (long long)(off + sz - 1),
-             total >= 0 ? std::to_string(total).c_str() : "*");
+    if (sz == 0)
+        snprintf(cr, sizeof(cr), "bytes */%lld", (long long)(last ? off : 0));
+    else
+        snprintf(cr, sizeof(cr), "bytes %lld-%lld/%s", (long long)off, (long long)(off + sz - 1),
+                 total >= 0 ? std::to_string(total).c_str() : "*");
     hdrs["Content-Range"] = cr;
     auto resp = http_.Put(s.upload_url, data, sz, hdrs);
     if (resp.status == 200 || resp.status == 201 || resp.status == 308)
@@ -193,9 +226,9 @@ bool GDriveBackend::CreateFolder(const std::string&, const std::string& parent_i
                                  const std::string& name, const std::string& tok, CloudItem& out,
                                  std::string& err) {
     std::string url = kApiBase + "/files?supportsAllDrives=true";
-    std::string body = "{\"name\":\"" + name +
-                       "\",\"mimeType\":\"application/vnd.google-apps.folder\",\"parents\":[\"" +
-                       parent_id + "\"]}";
+    std::string body = "{\"name\":" + JsonUtil::Quote(name) +
+                       ",\"mimeType\":\"application/vnd.google-apps.folder\",\"parents\":[" +
+                       JsonUtil::Quote(parent_id) + "]}";
     auto resp = http_.Post(url, tok, body);
     if (!resp.ok()) {
         err = "createFolder failed";
@@ -211,7 +244,8 @@ bool GDriveBackend::CopyItem(const std::string&, const std::string& src_id,
                              const std::string& dst_parent_id, const std::string& dst_name,
                              const std::string& tok, std::string& err) {
     std::string url = kApiBase + "/files/" + src_id + "/copy?supportsAllDrives=true";
-    std::string body = "{\"name\":\"" + dst_name + "\",\"parents\":[\"" + dst_parent_id + "\"]}";
+    std::string body = "{\"name\":" + JsonUtil::Quote(dst_name) + ",\"parents\":[" +
+                       JsonUtil::Quote(dst_parent_id) + "]}";
     auto resp = http_.Post(url, tok, body);
     if (!resp.ok()) {
         err = "copy failed " + std::to_string(resp.status);
@@ -231,33 +265,14 @@ bool GDriveBackend::MoveItem(const std::string&, const CloudItem& src_item,
         err = "move: failed to fetch file metadata (" + std::to_string(meta_resp.status) + ")";
         return false;
     }
-    // Safely extract all parent IDs from JSON array ["id1","id2",...]
     std::string remove_parents;
-    {
-        const auto& body = meta_resp.body;
-        auto p_pos = body.find("\"parents\"");
-        auto arr_start = (p_pos != std::string::npos) ? body.find('[', p_pos) : std::string::npos;
-        auto arr_end =
-            (arr_start != std::string::npos) ? body.find(']', arr_start) : std::string::npos;
-        for (size_t i = (arr_start != std::string::npos ? arr_start + 1 : body.size());
-             arr_end != std::string::npos && i < arr_end;) {
-            auto q1 = body.find('"', i);
-            if (q1 == std::string::npos || q1 >= arr_end)
-                break;
-            auto q2 = body.find('"', q1 + 1);
-            if (q2 == std::string::npos || q2 >= arr_end)
-                break;
-            if (!remove_parents.empty())
-                remove_parents += ",";
-            remove_parents += body.substr(q1 + 1, q2 - q1 - 1);
-            i = q2 + 1;
-        }
-    }
+    for (auto& parent : JsonUtil::GetStringArray(meta_resp.body, "parents"))
+        remove_parents += (remove_parents.empty() ? "" : ",") + parent;
 
     std::string url = kApiBase + "/files/" + src_item.id + "?supportsAllDrives=true";
     if (!remove_parents.empty())
-        url += "&removeParents=" + remove_parents; // GDrive IDs are safe alphanumeric
-    url += "&addParents=" + dst_parent.id;
+        url += "&" + UrlUtil::BuildQuery({{"removeParents", remove_parents}});
+    url += "&" + UrlUtil::BuildQuery({{"addParents", dst_parent.id}});
 
     std::string body = "{\"name\":\"" + JsonUtil::EscapeJsonString(dst_name) + "\"}";
     auto resp = http_.Patch(url, tok, body);
@@ -290,12 +305,8 @@ bool GDriveBackend::ListFolderRecursive(const std::string&, const std::string& f
     // This is O(1) API calls regardless of folder depth vs O(depth) for the default fallback.
     std::string page_token;
     do {
-        std::string url = kApiBase + "/files?q='" + folder_id +
-                          "'+in+ancestors+and+trashed=false"
-                          "&fields=nextPageToken,files(id,name,size,mimeType,md5Checksum)"
-                          "&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1000";
-        if (!page_token.empty())
-            url += "&" + UrlUtil::BuildQuery({{"pageToken", page_token}});
+        std::string url = ListUrl(DriveLiteral(folder_id) + " in ancestors and trashed = false",
+                                  kPageFields, page_token);
 
         auto resp = http_.Get(url, tok);
         if (!resp.ok()) {

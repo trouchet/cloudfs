@@ -1,3 +1,5 @@
+#include "core/cloud_http.hpp"
+
 #include "providers/gdrive_backend.hpp"
 
 #include <chrono>
@@ -77,38 +79,13 @@ bool GDriveOAuthProvider::RefreshToken(std::string& err) {
 // ─── GDriveServiceAccountAuth ─────────────────────────────────────────────────
 GDriveServiceAccountAuth::GDriveServiceAccountAuth(std::string key_json)
     : OAuth2AuthBase("gdrive-sa") {
-    // Parse JSON key file fields (inline helper — no OAuth2AuthBase dependency)
-    auto get = [&](const std::string& k) -> std::string {
-        auto search = "\"" + k + "\"";
-        auto pos = key_json.find(search);
-        if (pos == std::string::npos)
-            return "";
-        pos = key_json.find(':', pos + search.size());
-        if (pos == std::string::npos)
-            return "";
-        while (++pos < key_json.size() && (key_json[pos] == ' ' || key_json[pos] == '\t'))
-            ;
-        if (pos >= key_json.size() || key_json[pos] != '"')
-            return "";
-        ++pos;
-        std::string v;
-        while (pos < key_json.size() && key_json[pos] != '"') {
-            if (key_json[pos] == '\\' && pos + 1 < key_json.size()) {
-                ++pos;
-                v += key_json[pos];
-            } else
-                v += key_json[pos];
-            ++pos;
-        }
-        return v;
-    };
+    // The key file is a flat JSON object.  Parsing it properly also turns the
+    // "\n" escapes of private_key into real newlines, which PEM requires.
+    auto get = [&](const std::string& k) { return JsonUtil::GetString(key_json, k); };
     project_id_ = get("project_id");
     client_email_ = get("client_email");
     private_key_id_ = get("private_key_id");
     private_key_ = get("private_key");
-    // Unescape \n in private key
-    for (size_t p = 0; (p = private_key_.find("\\n", p)) != std::string::npos; p += 1)
-        private_key_.replace(p, 2, "\n");
 }
 
 // Base64url encoding helper (RFC 4648 §5, no padding)

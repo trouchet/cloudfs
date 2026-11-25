@@ -1,5 +1,7 @@
 #include "core/cloud_auth.hpp"
 
+#include "core/cloud_http.hpp"
+
 #include <cstring>
 
 #include <curl/curl.h>
@@ -37,36 +39,14 @@ std::string OAuth2AuthBase::PostForm(const std::string& url, const std::string& 
     return resp;
 }
 
+// Token endpoints answer with a flat JSON object; these are thin wrappers kept
+// for the auth providers' convenience.
 std::string OAuth2AuthBase::JsonGet(const std::string& json, const std::string& key) {
-    auto s = "\"" + key + "\"";
-    auto p = json.find(s);
-    if (p == std::string::npos)
-        return "";
-    p = json.find(':', p + s.size());
-    if (p == std::string::npos)
-        return "";
-    while (++p < json.size() && (json[p] == ' ' || json[p] == '\t'))
-        ;
-    if (p >= json.size())
-        return "";
-    if (json[p] != '"') {
-        std::string v;
-        while (p < json.size() && json[p] != ',' && json[p] != '}')
-            v += json[p++];
-        while (!v.empty() && (v.back() == ' ' || v.back() == '\r' || v.back() == '\n'))
-            v.pop_back();
-        return v;
-    }
-    ++p;
-    std::string v;
-    while (p < json.size() && json[p] != '"')
-        v += json[p++];
-    return v;
+    return JsonUtil::GetString(json, key);
 }
 
 int OAuth2AuthBase::JsonGetInt(const std::string& json, const std::string& key) {
-    auto v = JsonGet(json, key);
-    return v.empty() ? 0 : (int)strtol(v.c_str(), nullptr, 10);
+    return (int)JsonUtil::GetInt64(json, key);
 }
 
 } // namespace duckdb

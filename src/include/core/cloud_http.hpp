@@ -128,25 +128,45 @@ class CloudHttpClient {
 struct UrlUtil {
     // Percent-encode a single string (for query params, path segments)
     static std::string Encode(const std::string& s);
+    // Percent-encode a slash-separated path segment by segment, keeping the
+    // slashes: "/Shared Documents/a#b.csv" → "/Shared%20Documents/a%23b.csv"
+    static std::string EncodePath(const std::string& path);
     // Build a query string from key-value pairs (returns "k1=v1&k2=v2")
     static std::string BuildQuery(const std::vector<std::pair<std::string, std::string>>& params);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JsonUtil
-// Minimal JSON extraction — avoids a heavy dependency for simple API responses.
-// For complex responses, providers can link nlohmann/json or simdjson.
+// Reading: typed accessors over a JSON document, parsed with yyjson.  A key is
+// always looked up in the top-level object of `json`; invalid JSON or a missing
+// key yields the empty/zero value.
+// Writing: escaping helpers for building request bodies.
 // ─────────────────────────────────────────────────────────────────────────────
 struct JsonUtil {
+    // Strings are returned unescaped; numbers and booleans as text; objects and
+    // arrays as JSON text (so "is the key present" checks keep working).
     static std::string GetString(const std::string& json, const std::string& key);
+    // Accepts JSON numbers and numeric strings.
     static int64_t GetInt64(const std::string& json, const std::string& key);
     static bool GetBool(const std::string& json, const std::string& key);
-    // Extract array of raw JSON objects from "key": [{...}, {...}]
+    // True when `key` holds a JSON object (e.g. the "folder" facet of a Graph item).
+    static bool HasObject(const std::string& json, const std::string& key);
+    // Elements of the array at `key`, each as JSON text, for use with the
+    // accessors above:  for (auto& item : GetArray(body, "files")) GetString(item, "id")
     static std::vector<std::string> GetArray(const std::string& json, const std::string& key);
+    // Elements of an array of strings, unescaped.
+    static std::vector<std::string> GetStringArray(const std::string& json, const std::string& key);
     // Safe JSON string builder with proper escaping
     static std::string MakeObject(const std::vector<std::pair<std::string, std::string>>& kv);
     // Escape a string for safe inclusion in JSON (handles quotes, backslashes, control chars)
     static std::string EscapeJsonString(const std::string& s);
+    // A complete JSON string literal, quotes included: abc → "abc".
+    // Use this for every user-controlled value placed in a request body.
+    static std::string Quote(const std::string& s);
+    // Like Quote(), but the result is pure ASCII: every non-ASCII character
+    // (and DEL) becomes a \uXXXX escape.  Required for JSON carried in an HTTP
+    // header, e.g. Dropbox-API-Arg.  Input is expected to be UTF-8.
+    static std::string QuoteAscii(const std::string& s);
 };
 
 } // namespace duckdb

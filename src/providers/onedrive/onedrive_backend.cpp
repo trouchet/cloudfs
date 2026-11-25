@@ -39,7 +39,8 @@ bool OneDriveBackend::ResolveRoot(const std::string& root, const std::string& to
 
 bool OneDriveBackend::Stat(const std::string& root, const std::string& path, const std::string& tok,
                            CloudItem& out, std::string& err) {
-    std::string url = "https://graph.microsoft.com/v1.0/drives/" + root + "/root:" + path +
+    std::string url = "https://graph.microsoft.com/v1.0/drives/" + root +
+                      "/root:" + UrlUtil::EncodePath(path) +
                       "?$select=id,name,size,eTag,folder,file,@microsoft.graph.downloadUrl";
     auto resp = http_.Get(url, tok);
     if (resp.status == 404) {
@@ -56,7 +57,7 @@ bool OneDriveBackend::Stat(const std::string& root, const std::string& path, con
     out.etag = JsonUtil::GetString(resp.body, "eTag");
     out.download_url = JsonUtil::GetString(resp.body, "@microsoft.graph.downloadUrl");
     out.path = path;
-    out.is_folder = (resp.body.find("\"folder\":{") != std::string::npos);
+    out.is_folder = JsonUtil::HasObject(resp.body, "folder");
     return true;
 }
 
@@ -99,7 +100,7 @@ bool OneDriveBackend::ListFolder(const std::string& root, const std::string& fol
         c.name = JsonUtil::GetString(j, "name");
         c.size = JsonUtil::GetInt64(j, "size");
         c.etag = JsonUtil::GetString(j, "eTag");
-        c.is_folder = (j.find("\"folder\":{") != std::string::npos);
+        c.is_folder = JsonUtil::HasObject(j, "folder");
         cb(c);
     }
     cursor = JsonUtil::GetString(resp.body, "@odata.nextLink");
@@ -110,7 +111,7 @@ bool OneDriveBackend::CreateUploadSession(const std::string& root, const std::st
                                           const std::string& name, int64_t, const std::string& tok,
                                           CloudUploadSession& out, std::string& err) {
     std::string url = "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + parent_id +
-                      ":/" + name + ":/createUploadSession";
+                      ":/" + UrlUtil::Encode(name) + ":/createUploadSession";
     auto resp =
         http_.Post(url, tok, "{\"item\":{\"@microsoft.graph.conflictBehavior\":\"replace\"}}");
     if (!resp.ok()) {
@@ -152,7 +153,7 @@ bool OneDriveBackend::CreateFolder(const std::string& root, const std::string& p
                                    std::string& err) {
     std::string url =
         "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + parent_id + "/children";
-    auto resp = http_.Post(url, tok, "{\"name\":\"" + name + "\",\"folder\":{}}");
+    auto resp = http_.Post(url, tok, "{\"name\":" + JsonUtil::Quote(name) + ",\"folder\":{}}");
     if (!resp.ok()) {
         err = "createFolder failed";
         return false;
