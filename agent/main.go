@@ -55,6 +55,10 @@ type Item struct {
 }
 
 type ListResponse struct {
+	// Recursive is true when the listing covers all descendants. Clients use it
+	// to detect agents that predate ?recursive=true and ignore the parameter.
+	// It is the first field so it is also the first key in the JSON output.
+	Recursive  bool   `json:"recursive"`
 	Items      []Item `json:"items"`
 	NextCursor string `json:"next_cursor"`
 }
@@ -174,15 +178,58 @@ func handleRead(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
 
-// GET /v1/list?path=...&cursor=...
+// listEntry is one directory entry found by handleList.
+type listEntry struct {
+	abs  string
+	name string
+	info os.FileInfo
+}
+
+// GET /v1/list?path=...&cursor=...&recursive=true
+//
+// Lists the immediate children of path, or every descendant when
+// recursive=true. Pagination uses a numeric offset into the (deterministically
+// ordered) listing; follow-up requests must repeat path and recursive.
 func handleList(w http.ResponseWriter, r *http.Request) {
 	p, err := safePath(r.URL.Query().Get("path"))
 	if err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
+	recursive := r.URL.Query().Get("recursive") == "true"
 
-	entries, err := os.ReadDir(p)
+	var entries []listEntry
+	if recursive {
+		// WalkDir visits in lexical order and does not follow symlinks, so
+		// the order is stable across pages and link cycles cannot loop.
+		err = filepath.WalkDir(p, func(abs string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				if abs == p {
+					return walkErr
+				}
+				return nil // unreadable subtree: skip it, keep the rest
+			}
+			if abs == p {
+				return nil
+			}
+			info, infoErr := d.Info()
+			if infoErr != nil {
+				return nil
+			}
+			entries = append(entries, listEntry{abs: abs, name: d.Name(), info: info})
+			return nil
+		})
+	} else {
+		var dirEntries []os.DirEntry
+		dirEntries, err = os.ReadDir(p)
+		for _, e := range dirEntries {
+			info, infoErr := e.Info()
+			if infoErr != nil {
+				continue
+			}
+			entries = append(entries, listEntry{abs: filepath.Join(p, e.Name()), name: e.Name(), info: info})
+		}
+	}
 	if os.IsNotExist(err) {
 		http.Error(w, "not found", 404)
 		return
@@ -192,35 +239,38 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Simple cursor: numeric offset into sorted entries
-	cursor := r.URL.Query().Get("cursor")
+	// Simple cursor: numeric offset into the ordered entries
 	offset := 0
 	pageSize := 1000
-	if cursor != "" {
-		offset, _ = strconv.Atoi(cursor)
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		offset, err = strconv.Atoi(cursor)
+		if err != nil || offset < 0 {
+			http.Error(w, "invalid cursor", 400)
+			return
+		}
 	}
-
-	items := []Item{}
+	if offset > len(entries) {
+		offset = len(entries)
+	}
 	end := offset + pageSize
 	if end > len(entries) {
 		end = len(entries)
 	}
+
+	root := filepath.Clean(*flagRoot)
+	items := []Item{}
 	for _, e := range entries[offset:end] {
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		rel := strings.TrimPrefix(filepath.Join(p, e.Name()), filepath.Clean(*flagRoot))
+		rel := filepath.ToSlash(strings.TrimPrefix(e.abs, root))
 		if !strings.HasPrefix(rel, "/") {
 			rel = "/" + rel
 		}
 		items = append(items, Item{
 			Path:    rel,
-			Name:    e.Name(),
-			Size:    info.Size(),
-			IsDir:   e.IsDir(),
-			MtimeMs: info.ModTime().UnixMilli(),
-			Etag:    fmt.Sprintf("%d-%d", info.Size(), info.ModTime().UnixNano()),
+			Name:    e.name,
+			Size:    e.info.Size(),
+			IsDir:   e.info.IsDir(),
+			MtimeMs: e.info.ModTime().UnixMilli(),
+			Etag:    fmt.Sprintf("%d-%d", e.info.Size(), e.info.ModTime().UnixNano()),
 		})
 	}
 
@@ -230,7 +280,7 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ListResponse{Items: items, NextCursor: next})
+	json.NewEncoder(w).Encode(ListResponse{Recursive: recursive, Items: items, NextCursor: next})
 }
 
 // POST /v1/mkdir  body: {"path":"..."}
