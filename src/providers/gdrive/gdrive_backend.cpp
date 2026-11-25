@@ -195,10 +195,15 @@ bool GDriveBackend::CreateUploadSession(const std::string& root, const std::stri
 bool GDriveBackend::UploadChunk(const CloudUploadSession& s, const char* data, int64_t off,
                                 int64_t sz, bool last, const std::string&, std::string& err) {
     std::unordered_map<std::string, std::string> hdrs;
-    int64_t total = last && s.total_size_bytes > 0 ? s.total_size_bytes : -1;
+    // Intermediate chunks may leave the total open ("/*"); the final chunk must
+    // state it.  An empty final chunk has no byte range: "bytes */<total>".
+    const int64_t total = last ? off + sz : -1;
     char cr[96];
-    snprintf(cr, sizeof(cr), "bytes %lld-%lld/%s", (long long)off, (long long)(off + sz - 1),
-             total >= 0 ? std::to_string(total).c_str() : "*");
+    if (sz == 0)
+        snprintf(cr, sizeof(cr), "bytes */%lld", (long long)(last ? off : 0));
+    else
+        snprintf(cr, sizeof(cr), "bytes %lld-%lld/%s", (long long)off, (long long)(off + sz - 1),
+                 total >= 0 ? std::to_string(total).c_str() : "*");
     hdrs["Content-Range"] = cr;
     auto resp = http_.Put(s.upload_url, data, sz, hdrs);
     if (resp.status == 200 || resp.status == 201 || resp.status == 308)

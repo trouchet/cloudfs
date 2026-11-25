@@ -1,10 +1,14 @@
 #include "core/cloud_filesystem.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
 #include <cstring>
+#include <exception>
+#include <filesystem>
 
 // Portable glob wildcard match (replaces POSIX fnmatch for Windows compat).
 // Supports '*' (any sequence) and '?' (any single char). Returns 0 on match.
@@ -54,14 +58,28 @@ CloudFileHandle::CloudFileHandle(CloudFileSystem& fs, const std::string& path,
       open_flags(flags), backend(backend_) {}
 
 CloudFileHandle::~CloudFileHandle() {
-    Close();
+    if (!upload_active)
+        return;
+    // Reached without an explicit Close().  A destructor must not throw, so
+    // the upload is completed only on the normal path and any failure turns
+    // into an abort; during stack unwinding the write was interrupted and the
+    // partial upload is discarded.
+    auto& cfs = dynamic_cast<CloudFileSystem&>(file_system);
+    if (std::uncaught_exceptions() > 0) {
+        cfs.AbortUpload(*this);
+        return;
+    }
+    try {
+        cfs.FinishUpload(*this);
+    } catch (...) {
+        // Nobody is left to report the failure to; do not leave a session behind.
+        cfs.AbortUpload(*this);
+    }
 }
 
 void CloudFileHandle::Close() {
-    if (upload_active && !write_buffer.empty()) {
-        auto& cfs = dynamic_cast<CloudFileSystem&>(file_system);
-        cfs.FileSync(*this);
-    }
+    if (upload_active)
+        dynamic_cast<CloudFileSystem&>(file_system).FinishUpload(*this);
 }
 
 // ─── CloudFileSystem ──────────────────────────────────────────────────────────
@@ -178,7 +196,7 @@ bool CloudFileSystem::EnsureDownloadUrl(ICloudBackend& backend, const std::strin
 
 // ─── OpenFile ─────────────────────────────────────────────────────────────────
 unique_ptr<FileHandle> CloudFileSystem::OpenFile(const string& path, FileOpenFlags flags,
-                                                 optional_ptr<FileOpener>) {
+                                                 optional_ptr<FileOpener> opener) {
     auto& backend = BackendFor(path);
     std::string err;
 
@@ -209,22 +227,23 @@ unique_ptr<FileHandle> CloudFileSystem::OpenFile(const string& path, FileOpenFla
                   ? "cloudfs: parent not found: " + parent_path + " — " + err
                   : "");
 
-        auto caps = backend.Capabilities();
-        CloudUploadSession session;
-        session.chunk_size_bytes = caps.upload_chunk_alignment * 4; // 4× alignment
-        session.chunk_size_bytes = std::max(session.chunk_size_bytes, caps.min_upload_chunk);
-        session.chunk_size_bytes = std::min(session.chunk_size_bytes, caps.max_upload_chunk);
-
-        Throw(!backend.CreateUploadSession(root_id, parent.id, file_name, -1, tok, session, err)
-                  ? "cloudfs: " + err
-                  : "");
-
         CloudItem placeholder;
         placeholder.name = file_name;
         placeholder.size = 0;
         auto h = make_uniq<CloudFileHandle>(*this, path, backend, placeholder, root_id, flags);
-        h->upload_session = session;
         h->upload_active = true;
+        h->upload_parent_id = parent.id;
+        h->upload_file_name = file_name;
+
+        auto caps = backend.Capabilities();
+        h->spooling = caps.needs_total_size_upfront;
+        if (h->spooling) {
+            // Prefer DuckDB's temp_directory; fall back to the system one.
+            Value temp_dir;
+            if (FileOpener::TryGetCurrentSetting(opener, "temp_directory", temp_dir) &&
+                !temp_dir.IsNull() && !temp_dir.ToString().empty())
+                h->spool_dir = temp_dir.ToString();
+        }
         return std::move(h);
     }
 
@@ -282,15 +301,60 @@ int64_t CloudFileSystem::Read(FileHandle& handle, void* buf, int64_t nr) {
 }
 
 // ─── Write ────────────────────────────────────────────────────────────────────
-static constexpr int64_t kWriteBufMax = 256LL * 1024 * 1024; // 256 MiB max buffer
+// Chunk size for non-final chunks: what the backend asked for in its session,
+// rounded down to its alignment and clamped to its limits.
+static int64_t AlignedChunkSize(const ProviderCapabilities& caps, int64_t requested) {
+    int64_t chunk = requested > 0 ? requested : caps.upload_chunk_alignment * 4;
+    chunk = std::max(chunk, caps.min_upload_chunk);
+    chunk = std::min(chunk, caps.max_upload_chunk);
+    if (caps.upload_chunk_alignment > 1) {
+        chunk = (chunk / caps.upload_chunk_alignment) * caps.upload_chunk_alignment;
+        chunk = std::max(chunk, caps.upload_chunk_alignment);
+    }
+    return std::max<int64_t>(chunk, 1);
+}
+
+// Default chunk size before the session exists (the backend may refine it).
+static constexpr int64_t kDefaultChunk = 8LL * 1024 * 1024;
 
 void CloudFileSystem::Write(FileHandle& handle, void* buf, int64_t nr, idx_t loc) {
     auto& h = dynamic_cast<CloudFileHandle&>(handle);
-    Throw(!h.upload_active ? "cloudfs: write on read-only handle" : "");
-    if ((int64_t)h.write_buffer.size() < (int64_t)(loc + nr))
-        h.write_buffer.resize(loc + nr);
-    memcpy(h.write_buffer.data() + loc, buf, nr);
-    h.bytes_written = std::max(h.bytes_written, (int64_t)(loc + nr));
+    Throw(!h.upload_active ? "cloudfs: write on a handle that is not open for writing" : "");
+    // Upload sessions are append-only: there is no way to rewrite bytes that
+    // were already sent, so only sequential writes can be supported.
+    if ((int64_t)loc != h.bytes_written)
+        throw NotImplementedException(
+            "cloudfs: non-sequential write to '%s' (offset %llu, expected %lld); cloud uploads "
+            "are append-only",
+            h.path, (unsigned long long)loc, (long long)h.bytes_written);
+    if (nr <= 0)
+        return;
+
+    if (h.spooling) {
+        if (!h.spool_file) {
+            h.spool_fs = FileSystem::CreateLocal();
+            std::string dir = h.spool_dir;
+            if (dir.empty())
+                dir = std::filesystem::temp_directory_path().string();
+            else if (!h.spool_fs->DirectoryExists(dir))
+                h.spool_fs->CreateDirectory(dir);
+            h.spool_path = h.spool_fs->JoinPath(
+                dir, "cloudfs_upload_" + UUID::ToString(UUID::GenerateRandomUUID()) + ".tmp");
+            h.spool_file = h.spool_fs->OpenFile(
+                h.spool_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ |
+                                  FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+        }
+        h.spool_fs->Write(*h.spool_file, buf, nr, (idx_t)h.bytes_written);
+        h.bytes_written += nr;
+        h.position = h.bytes_written;
+        return;
+    }
+
+    auto* src = static_cast<const char*>(buf);
+    h.write_buffer.insert(h.write_buffer.end(), src, src + nr);
+    h.bytes_written += nr;
+    h.position = h.bytes_written;
+    UploadFullChunks(h);
 }
 
 int64_t CloudFileSystem::Write(FileHandle& handle, void* buf, int64_t nr) {
@@ -299,45 +363,127 @@ int64_t CloudFileSystem::Write(FileHandle& handle, void* buf, int64_t nr) {
     return nr;
 }
 
-void CloudFileSystem::FlushWrite(CloudFileHandle& h) {
-    if (!h.upload_active || h.write_buffer.empty())
+void CloudFileSystem::EnsureUploadSession(CloudFileHandle& h, int64_t total) {
+    if (h.session_created)
         return;
     std::string err, tok;
-    Throw(!GetToken(h.path, tok, err) ? "cloudfs flush: " + err : "");
+    Throw(!GetToken(h.path, tok, err) ? "cloudfs upload: " + err : "");
+    h.upload_session.total_size_bytes = total;
+    Throw(!h.backend.CreateUploadSession(h.root_id, h.upload_parent_id, h.upload_file_name, total,
+                                         tok, h.upload_session, err)
+              ? "cloudfs upload: " + err
+              : "");
+    h.session_created = true;
+    // The backend states its preferred chunk size in the session.
+    h.chunk_size = AlignedChunkSize(h.backend.Capabilities(), h.upload_session.chunk_size_bytes);
+}
 
-    auto caps = h.backend.Capabilities();
-    int64_t total = h.bytes_written;
-    int64_t chunk = h.upload_session.chunk_size_bytes;
+void CloudFileSystem::UploadChunk(CloudFileHandle& h, const char* data, int64_t size, bool last) {
+    // The total is known up front only when spooling or for a single-chunk file.
+    EnsureUploadSession(h, (h.spooling || last) ? h.bytes_written : -1);
+    // Backends that put the total in each request read it from the session.
+    if (h.spooling || last)
+        h.upload_session.total_size_bytes = h.bytes_written;
 
-    // Align chunk to provider's requirement
-    if (caps.upload_chunk_alignment > 1)
-        chunk = (chunk / caps.upload_chunk_alignment) * caps.upload_chunk_alignment;
-    chunk = std::max(chunk, caps.min_upload_chunk);
-    chunk = std::min(chunk, caps.max_upload_chunk);
+    std::string err, tok;
+    // Fetch the token per chunk: long uploads outlive an access token.
+    Throw(!GetToken(h.path, tok, err) ? "cloudfs upload: " + err : "");
+    if (!h.backend.UploadChunk(h.upload_session, data, h.bytes_uploaded, size, last, tok, err))
+        Throw("cloudfs upload: " + (err.empty() ? std::string("chunk rejected") : err));
+    h.bytes_uploaded += size;
+}
 
-    for (int64_t offset = 0; offset < total; offset += chunk) {
-        int64_t sz = std::min(chunk, total - offset);
-        bool last = (offset + sz >= total);
-        if (!h.backend.UploadChunk(h.upload_session, h.write_buffer.data() + offset, offset, sz,
-                                   last, tok, err)) {
-            // Clean up the server-side upload session before propagating the error
-            std::string abort_err;
-            h.backend.AbortUpload(h.upload_session, tok, abort_err);
-            Throw("cloudfs upload: " + err);
-        }
+void CloudFileSystem::UploadFullChunks(CloudFileHandle& h) {
+    if (h.chunk_size <= 0)
+        h.chunk_size = AlignedChunkSize(h.backend.Capabilities(), kDefaultChunk);
+    if ((int64_t)h.write_buffer.size() <= h.chunk_size)
+        return;
+    // More than one chunk's worth is buffered, so the file needs a session
+    // with an open-ended total; creating it also settles the chunk size.
+    EnsureUploadSession(h, -1);
+
+    size_t consumed = 0;
+    // Strictly greater: the last byte(s) stay buffered until FinishUpload(),
+    // because only then do we know which chunk is the final one.
+    while ((int64_t)(h.write_buffer.size() - consumed) > h.chunk_size) {
+        UploadChunk(h, h.write_buffer.data() + consumed, h.chunk_size, false);
+        consumed += (size_t)h.chunk_size;
     }
+    if (consumed > 0)
+        h.write_buffer.erase(h.write_buffer.begin(), h.write_buffer.begin() + (ptrdiff_t)consumed);
+}
+
+void CloudFileSystem::FinishUpload(CloudFileHandle& h) {
+    if (!h.upload_active)
+        return;
+    try {
+        if (h.spooling) {
+            const int64_t total = h.bytes_written;
+            EnsureUploadSession(h, total); // also settles h.chunk_size
+            std::vector<char> chunk;
+            do {
+                const int64_t want = std::min(h.chunk_size, total - h.bytes_uploaded);
+                chunk.resize((size_t)want);
+                if (want > 0)
+                    h.spool_file->Read(chunk.data(), (idx_t)want, (idx_t)h.bytes_uploaded);
+                const bool last = h.bytes_uploaded + want >= total;
+                UploadChunk(h, chunk.data(), want, last);
+            } while (h.bytes_uploaded < total);
+        } else {
+            UploadFullChunks(h);
+            // Whatever is left (possibly nothing, for an empty file) is the final chunk.
+            UploadChunk(h, h.write_buffer.data(), (int64_t)h.write_buffer.size(), true);
+        }
+    } catch (...) {
+        AbortUpload(h);
+        throw;
+    }
+
     h.upload_active = false;
     h.write_buffer.clear();
+    h.write_buffer.shrink_to_fit();
+    h.file_size = h.bytes_written;
+    if (h.spool_file) {
+        h.spool_file.reset();
+        try {
+            h.spool_fs->RemoveFile(h.spool_path);
+        } catch (...) {
+            // leftover temp file: not worth failing a completed upload
+        }
+    }
     cache_.InvalidateItem(h.backend.Scheme(), h.path);
 }
 
-void CloudFileSystem::FileSync(FileHandle& handle) {
-    FlushWrite(dynamic_cast<CloudFileHandle&>(handle));
+void CloudFileSystem::AbortUpload(CloudFileHandle& h) noexcept {
+    if (!h.upload_active)
+        return;
+    h.upload_active = false;
+    try {
+        if (h.session_created) {
+            std::string err, tok;
+            if (GetToken(h.path, tok, err))
+                h.backend.AbortUpload(h.upload_session, tok, err);
+        }
+    } catch (...) {}
+    try {
+        h.write_buffer.clear();
+        if (h.spool_file) {
+            h.spool_file.reset();
+            h.spool_fs->RemoveFile(h.spool_path);
+        }
+    } catch (...) {}
+    cache_.InvalidateItem(h.backend.Scheme(), h.path);
 }
+
+// A resumable upload cannot be made durable part-way: the object only exists
+// once the session is completed, which happens on Close().  Full chunks are
+// already on their way, so there is nothing more to do here.
+void CloudFileSystem::FileSync(FileHandle&) {}
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 int64_t CloudFileSystem::GetFileSize(FileHandle& h) {
-    return dynamic_cast<CloudFileHandle&>(h).file_size;
+    auto& cfh = dynamic_cast<CloudFileHandle&>(h);
+    return cfh.upload_active ? cfh.bytes_written : cfh.file_size;
 }
 timestamp_t CloudFileSystem::GetLastModifiedTime(FileHandle& h) {
     auto& cfh = dynamic_cast<CloudFileHandle&>(h);

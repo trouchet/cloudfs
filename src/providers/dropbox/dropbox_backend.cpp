@@ -173,9 +173,9 @@ bool DropboxBackend::ListFolderRecursive(const std::string& root, const std::str
     return true;
 }
 
-bool DropboxBackend::CreateUploadSession(const std::string&, const std::string&, const std::string&,
-                                         int64_t, const std::string& tok, CloudUploadSession& out,
-                                         std::string& err) {
+bool DropboxBackend::CreateUploadSession(const std::string&, const std::string& parent_id,
+                                         const std::string& name, int64_t, const std::string& tok,
+                                         CloudUploadSession& out, std::string& err) {
     HttpRequest req;
     req.method = "POST";
     req.SetBearerAuth(tok);
@@ -189,7 +189,9 @@ bool DropboxBackend::CreateUploadSession(const std::string&, const std::string&,
         return false;
     }
     out.upload_url = JsonUtil::GetString(resp.body, "session_id"); // store session_id here
-    out.chunk_size_bytes = 8 * 1024 * 1024;                        // 8 MiB
+    // Destination for the commit step (same parent/name convention as CreateFolder).
+    out.item_id = (parent_id == "root" ? std::string() : parent_id) + "/" + name;
+    out.chunk_size_bytes = 8 * 1024 * 1024; // 8 MiB
     return !out.upload_url.empty();
 }
 

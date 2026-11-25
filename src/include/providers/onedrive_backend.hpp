@@ -34,7 +34,7 @@ class OneDriveBackend : public ICloudBackend {
         caps.supports_resumable_uploads = true;
         caps.supports_server_side_copy = true;
         caps.supports_recursive_list = false;
-        caps.needs_total_size_upfront = false;
+        caps.needs_total_size_upfront = true;     // Content-Range carries the total
         caps.upload_chunk_alignment = 320 * 1024; // same Graph API rules
         caps.min_upload_chunk = 320 * 1024;
         caps.max_upload_chunk = 60 * 1024 * 1024;

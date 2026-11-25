@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -124,5 +125,51 @@ func TestListMissingFolder(t *testing.T) {
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("missing folder (%q): status %d, want 404", recursive, rec.Code)
 		}
+	}
+}
+
+// An aborted upload removes the partial file and forgets the session.
+func TestUploadAbort(t *testing.T) {
+	root := t.TempDir()
+	*flagRoot = root
+
+	rec := httptest.NewRecorder()
+	handleUploadStart(rec, httptest.NewRequest(http.MethodPost, "/v1/upload/start",
+		strings.NewReader(`{"path":"/out/partial.bin","size":-1}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("start: status %d: %s", rec.Code, rec.Body.String())
+	}
+	var started struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &started); err != nil || started.SessionID == "" {
+		t.Fatalf("start: bad response %q", rec.Body.String())
+	}
+	q := "?session=" + started.SessionID
+
+	rec = httptest.NewRecorder()
+	handleUploadChunk(rec, httptest.NewRequest(http.MethodPut, "/v1/upload/chunk"+q+"&offset=0",
+		strings.NewReader("hello")))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("chunk: status %d", rec.Code)
+	}
+	partial := filepath.Join(root, "out/partial.bin")
+	if _, err := os.Stat(partial); err != nil {
+		t.Fatalf("partial file missing before abort: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	handleUploadAbort(rec, httptest.NewRequest(http.MethodDelete, "/v1/upload/abort"+q, nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("abort: status %d", rec.Code)
+	}
+	if _, err := os.Stat(partial); !os.IsNotExist(err) {
+		t.Errorf("partial file still present after abort (err=%v)", err)
+	}
+
+	rec = httptest.NewRecorder()
+	handleUploadAbort(rec, httptest.NewRequest(http.MethodDelete, "/v1/upload/abort"+q, nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("second abort: status %d, want 404", rec.Code)
 	}
 }

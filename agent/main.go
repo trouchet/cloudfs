@@ -449,6 +449,31 @@ func handleUploadFinish(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(item)
 }
 
+// DELETE /v1/upload/abort?session=...
+//
+// Discards an unfinished upload: closes the session and removes the partial
+// file. Unknown sessions answer 404 (already finished, aborted or expired).
+func handleUploadAbort(w http.ResponseWriter, r *http.Request) {
+	if *flagReadOnly {
+		http.Error(w, "read-only mode", 403)
+		return
+	}
+	id := r.URL.Query().Get("session")
+	uploadMu.Lock()
+	sess, ok := uploadSessions[id]
+	if ok {
+		delete(uploadSessions, id)
+	}
+	uploadMu.Unlock()
+	if !ok {
+		http.Error(w, "unknown session", 404)
+		return
+	}
+	sess.File.Close()
+	os.Remove(sess.Path)
+	w.WriteHeader(204)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 func main() {
 	flag.Parse()
@@ -483,6 +508,7 @@ func main() {
 	mux.HandleFunc("/v1/upload/start", authMiddleware(handleUploadStart))
 	mux.HandleFunc("/v1/upload/chunk", authMiddleware(handleUploadChunk))
 	mux.HandleFunc("/v1/upload/finish", authMiddleware(handleUploadFinish))
+	mux.HandleFunc("/v1/upload/abort", authMiddleware(handleUploadAbort))
 
 	addr := fmt.Sprintf(":%d", *flagPort)
 	mode := "HTTP"

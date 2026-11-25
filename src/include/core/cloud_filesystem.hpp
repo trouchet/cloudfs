@@ -132,8 +132,23 @@ class CloudFileSystem : public FileSystem {
     bool EnsureDownloadUrl(ICloudBackend& backend, const std::string& root_id, CloudItem& item,
                            const std::string& token, std::string& err);
 
-    // Flush write buffer via upload session
-    void FlushWrite(CloudFileHandle& h);
+  public:
+    // Complete the upload of a handle opened for writing.  Called from
+    // CloudFileHandle::Close(); throws if the upload fails (after aborting it).
+    void FinishUpload(CloudFileHandle& h);
+    // Give up on an upload: release the server-side session and local spool.
+    // Never throws.
+    void AbortUpload(CloudFileHandle& h) noexcept;
+
+  private:
+    // Create the upload session if it does not exist yet.  total = -1 when the
+    // final size is not known.  Sets the handle's chunk size.
+    void EnsureUploadSession(CloudFileHandle& h, int64_t total);
+    // Send one chunk, creating the upload session first if needed.
+    void UploadChunk(CloudFileHandle& h, const char* data, int64_t size, bool last);
+    // Streaming: upload every full chunk currently buffered, keeping at least
+    // one byte back so the final chunk can be flagged as such on close.
+    void UploadFullChunks(CloudFileHandle& h);
 
     // Glob recursive helper
     void GlobRecursive(ICloudBackend& backend, const std::string& root_id,
@@ -166,12 +181,35 @@ class CloudFileHandle : public FileHandle {
     CloudItem item;
     FileOpenFlags open_flags;
 
-    // Write state
+    // ── Write state ───────────────────────────────────────────────────────────
+    // Writes are sequential and uploaded as they arrive, so memory use is
+    // bounded by one chunk regardless of file size:
+    //
+    //   streaming  bytes accumulate in write_buffer and every full chunk is
+    //              sent at once; the remainder goes out as the final chunk
+    //              when the handle is closed.
+    //   spooling   backends that must know the total size before the first
+    //              chunk (ProviderCapabilities::needs_total_size_upfront)
+    //              get the bytes written to a local temporary file, which is
+    //              uploaded chunk by chunk on close.
+    //
+    // The upload session is created lazily with the first chunk, so a handle
+    // that fails early leaves nothing behind on the server.
+    bool upload_active = false;   // opened for writing and not yet finalized/aborted
+    bool session_created = false; // CreateUploadSession succeeded
+    std::string upload_parent_id; // destination folder
+    std::string upload_file_name; // destination name
     CloudUploadSession upload_session;
-    std::vector<char> write_buffer;
-    int64_t bytes_written = 0;
+    int64_t chunk_size = 0;         // bytes per non-final chunk (aligned)
+    std::vector<char> write_buffer; // streaming: bytes not yet uploaded
+    int64_t bytes_written = 0;      // total bytes accepted by Write()
+    int64_t bytes_uploaded = 0;     // bytes handed to the backend so far
     int64_t declared_size = -1;
-    bool upload_active = false;
+    bool spooling = false;
+    std::string spool_dir; // where to create the spool file
+    std::string spool_path;
+    unique_ptr<FileSystem> spool_fs;
+    unique_ptr<FileHandle> spool_file;
 
     // Back-reference to the backend that owns this handle
     ICloudBackend& backend;

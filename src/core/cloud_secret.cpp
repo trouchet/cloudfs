@@ -92,7 +92,7 @@ void CloudSecretRegistry::Register(ExtensionLoader& loader, const std::string& s
         loader.RegisterSecretType(st);
     }
 
-    factories_[FactoryKey(secret_type, provider)] = std::move(factory);
+    AddFactory(secret_type, provider, std::move(factory));
 
     CreateSecretFunction f;
     f.secret_type = secret_type;
@@ -101,6 +101,11 @@ void CloudSecretRegistry::Register(ExtensionLoader& loader, const std::string& s
     for (auto& p : named_params)
         f.named_parameters[p] = LogicalType::VARCHAR;
     loader.RegisterFunction(std::move(f));
+}
+
+void CloudSecretRegistry::AddFactory(const std::string& secret_type, const std::string& provider,
+                                     AuthFactoryFn factory) {
+    factories_[FactoryKey(secret_type, provider)] = std::move(factory);
 }
 
 std::shared_ptr<ICloudAuthProvider> CloudSecretRegistry::Build(const std::string& secret_type,

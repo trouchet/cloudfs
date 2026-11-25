@@ -65,6 +65,12 @@ class CloudSecretRegistry {
                   const std::string& provider, const std::vector<std::string>& named_params,
                   AuthFactoryFn factory);
 
+    // Add only the auth factory for a (secret_type, provider) pair, without
+    // registering anything with DuckDB.  Register() calls this; it is public
+    // for embedders and tests that register the secret type themselves.
+    void AddFactory(const std::string& secret_type, const std::string& provider,
+                    AuthFactoryFn factory);
+
     // Find the secret of `secret_type` whose scope best matches `url` and
     // return its auth provider.  Returns false and sets err when no secret
     // matches or the secret cannot be turned into an auth provider.
