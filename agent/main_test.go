@@ -173,3 +173,45 @@ func TestUploadAbort(t *testing.T) {
 		t.Errorf("second abort: status %d, want 404", rec.Code)
 	}
 }
+
+func TestMove(t *testing.T) {
+	root := t.TempDir()
+	*flagRoot = root
+	writeFile(t, root, "data/src.csv")
+	writeFile(t, root, "data/existing.csv")
+
+	move := func(from, to string) int {
+		rec := httptest.NewRecorder()
+		body := fmt.Sprintf(`{"from":%q,"to":%q}`, from, to)
+		handleMove(rec, httptest.NewRequest(http.MethodPost, "/v1/move", strings.NewReader(body)))
+		return rec.Code
+	}
+
+	// Moving over an existing file replaces it.
+	if code := move("/data/src.csv", "/data/existing.csv"); code != http.StatusOK {
+		t.Fatalf("move over existing file: status %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(root, "data/src.csv")); !os.IsNotExist(err) {
+		t.Errorf("source still exists after move")
+	}
+	if _, err := os.Stat(filepath.Join(root, "data/existing.csv")); err != nil {
+		t.Errorf("destination missing after move: %v", err)
+	}
+
+	if code := move("/data/nope.csv", "/data/x.csv"); code != http.StatusNotFound {
+		t.Errorf("missing source: status %d, want 404", code)
+	}
+	if code := move("/data/existing.csv", "/no/such/dir/x.csv"); code != http.StatusNotFound {
+		t.Errorf("missing destination folder: status %d, want 404", code)
+	}
+	if code := move("/data/existing.csv", "/"); code != http.StatusBadRequest {
+		t.Errorf("move onto root: status %d, want 400", code)
+	}
+	// Paths are confined to the root.
+	if code := move("/data/existing.csv", "/../escaped.csv"); code != http.StatusOK {
+		t.Errorf("confined move: status %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(root, "escaped.csv")); err != nil {
+		t.Errorf("'/../escaped.csv' should resolve inside the root: %v", err)
+	}
+}

@@ -323,6 +323,54 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
+// POST /v1/move  body: {"from":"...","to":"..."}
+//
+// Renames a file or directory within the root. An existing destination file is
+// replaced atomically, which is what DuckDB relies on when COPY overwrites a
+// file (it writes a temporary file and moves it over the target).
+func handleMove(w http.ResponseWriter, r *http.Request) {
+	if *flagReadOnly {
+		http.Error(w, "read-only mode", 403)
+		return
+	}
+	var req struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.From == "" || req.To == "" {
+		http.Error(w, "from and to are required", 400)
+		return
+	}
+	from, err := safePath(req.From)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	to, err := safePath(req.To)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	root := filepath.Clean(*flagRoot)
+	if from == root || to == root {
+		http.Error(w, "cannot move the root", 400)
+		return
+	}
+	if _, err := os.Lstat(from); os.IsNotExist(err) {
+		http.Error(w, "not found", 404)
+		return
+	}
+	if err := os.Rename(from, to); err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "destination folder not found", 404)
+			return
+		}
+		http.Error(w, err.Error(), 409)
+		return
+	}
+	w.WriteHeader(200)
+}
+
 // POST /v1/upload/start  body: {"path":"...", "size": N}
 func handleUploadStart(w http.ResponseWriter, r *http.Request) {
 	if *flagReadOnly {
@@ -505,6 +553,7 @@ func main() {
 	mux.HandleFunc("/v1/list", authMiddleware(handleList))
 	mux.HandleFunc("/v1/mkdir", authMiddleware(handleMkdir))
 	mux.HandleFunc("/v1/delete", authMiddleware(handleDelete))
+	mux.HandleFunc("/v1/move", authMiddleware(handleMove))
 	mux.HandleFunc("/v1/upload/start", authMiddleware(handleUploadStart))
 	mux.HandleFunc("/v1/upload/chunk", authMiddleware(handleUploadChunk))
 	mux.HandleFunc("/v1/upload/finish", authMiddleware(handleUploadFinish))

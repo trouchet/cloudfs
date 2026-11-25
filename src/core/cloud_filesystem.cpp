@@ -638,9 +638,11 @@ void CloudFileSystem::MoveFile(const string& src_url, const string& dst_url,
     // Perform server-side move
     Throw(!b.MoveItem(root_id, src_item, dst_parent, dst_name, tok, err) ? err : "");
 
-    // Invalidate affected cache entries
-    cache_.InvalidateItem(b.Scheme(), src_url);
-    cache_.InvalidatePrefix(b.Scheme(), b.Scheme() + "://" + src_raw + dst_parent_path);
+    // Cached metadata is keyed by URL.  Both ends are stale now: the source is
+    // gone and the destination may have replaced an item of a different size.
+    // The prefix form also covers everything beneath a moved directory.
+    cache_.InvalidatePrefix(b.Scheme(), src_url);
+    cache_.InvalidatePrefix(b.Scheme(), dst_url);
 }
 
 bool CloudFileSystem::ListFiles(const string& dir,
