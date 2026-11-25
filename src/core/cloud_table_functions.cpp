@@ -205,9 +205,8 @@ static unique_ptr<FunctionData> LsBind(ClientContext& ctx, TableFunctionBindInpu
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
-                                    url);
+    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id, err))
+        throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
         cfs->GetTokenPublic(b->Scheme(), tok, err);
 
@@ -340,9 +339,8 @@ static unique_ptr<FunctionData> StatBind(ClientContext&, TableFunctionBindInput&
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
-                                    url);
+    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id, err))
+        throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
         cfs->GetTokenPublic(b->Scheme(), tok, err);
 
@@ -524,9 +522,8 @@ static unique_ptr<FunctionData> DuBind(ClientContext&, TableFunctionBindInput& i
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id))
-        throw InvalidInputException("Failed to resolve root ID for URL '%s'. Check credentials.",
-                                    url);
+    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id, err))
+        throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
         cfs->GetTokenPublic(b->Scheme(), tok, err);
 

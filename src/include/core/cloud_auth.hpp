@@ -24,7 +24,10 @@ class ICloudAuthProvider {
     virtual bool GetAccessToken(std::string& out_token, std::string& err) = 0;
 
     // Optional: force re-authentication (e.g. after 401 Unauthorized).
-    virtual bool Reauthenticate(std::string& err) { return GetAccessToken(*new std::string, err); }
+    virtual bool Reauthenticate(std::string& err) {
+        std::string discarded;
+        return GetAccessToken(discarded, err);
+    }
 
     // Provider name for error messages ("sharepoint", "gdrive", …).
     virtual std::string ProviderName() const = 0;
