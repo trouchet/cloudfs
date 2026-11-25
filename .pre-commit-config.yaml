@@ -81,12 +81,20 @@ repos:
   # ============================================================================
   # Markdown Formatting
   # ============================================================================
-  - repo: https://github.com/executablebooks/mdformat
-    rev: 1.0.0
+  # Declared as a local hook on purpose: mdformat-tables has no release that
+  # supports mdformat >= 0.8, and `pre-commit autoupdate` (pre-commit.ci) keeps
+  # bumping the upstream repo's rev to 1.x, which makes the hook environment
+  # impossible to install. Local hooks are not touched by autoupdate.
+  - repo: local
     hooks:
       - id: mdformat
+        name: mdformat
+        entry: mdformat
+        language: python
+        types: [markdown]
         args: ['--wrap', '80']
         additional_dependencies:
+          - mdformat==0.7.22
           - mdformat-gfm==1.0.0
           - mdformat-tables==1.0.0
 
