@@ -30,7 +30,7 @@ static CloudFileSystem* g_cfs = nullptr;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LoadInternal
-// Wires together: CloudFileSystem + 4 backends + 8 secret providers
+// Wires together: CloudFileSystem + 6 backends + 15 secret providers
 // ─────────────────────────────────────────────────────────────────────────────
 static void LoadInternal(ExtensionLoader& loader) {
     auto& db = loader.GetDatabaseInstance();
