@@ -161,6 +161,29 @@ SELECT * FROM read_csv('vfs://127.0.0.1:1/data/f.csv');
 ----
 no secret matches
 
+# PERSIST_TOKEN is a BOOLEAN option of the interactive oauth providers (#32)
+statement ok
+CREATE SECRET optout (TYPE onedrive, PROVIDER oauth, PERSIST_TOKEN false);
+
+statement ok
+CREATE OR REPLACE SECRET optout (TYPE gdrive, PROVIDER oauth,
+                                 CLIENT_ID 'c', CLIENT_SECRET 's', PERSIST_TOKEN true);
+
+statement error
+CREATE OR REPLACE SECRET optout (TYPE dropbox, PROVIDER oauth,
+                                 APP_KEY 'k', APP_SECRET 's', PERSIST_TOKEN 'maybe');
+----
+Could not convert
+
+# ... and of no other provider
+statement error
+CREATE SECRET optout2 (TYPE onedrive, PROVIDER token, TOKEN 'x', PERSIST_TOKEN false);
+----
+persist_token
+
+statement ok
+DROP SECRET optout;
+
 # Cleanup
 statement ok
 DROP SECRET sp; DROP SECRET od; DROP SECRET gd; DROP SECRET dbx;

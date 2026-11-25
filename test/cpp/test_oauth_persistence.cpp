@@ -87,9 +87,12 @@ struct Instance {
         });
     }
 
-    void CreateSecret(const std::string& name, SecretPersistType persist) {
+    void CreateSecret(const std::string& name, SecretPersistType persist,
+                      bool persist_token = true) {
         auto secret = make_uniq<KeyValueSecret>(vector<string>{}, kType, "oauth", name);
         secret->secret_map["client_id"] = Value("cid");
+        if (!persist_token)
+            secret->secret_map["persist_token"] = Value::BOOLEAN(false);
         SecretManager::Get(*db.instance)
             .RegisterSecret(CatalogTransaction::GetSystemTransaction(*db.instance),
                             std::move(secret), OnCreateConflict::ERROR_ON_CONFLICT, persist);
@@ -201,6 +204,25 @@ int main() {
         CHECK(only.Stored("t", "refresh_token").empty());
         CHECK(only.Token() == "AT-interactive");
         CHECK(c.acquired == 1);
+    }
+
+    { // 5. PERSIST_TOKEN false: nothing is stored, every process authorizes again
+        const std::string dir = (base / "optout").string();
+        Counters c;
+        {
+            Instance first(dir, c);
+            first.CreateSecret("s", SecretPersistType::PERSISTENT, false);
+            CHECK(first.Token() == "AT-interactive");
+            CHECK(first.Stored("s", "refresh_token").empty());
+            CHECK(first.Token() == "AT-interactive"); // still cached within the process
+            CHECK(c.acquired == 1);
+        }
+        {
+            Instance second(dir, c);
+            CHECK(second.Stored("s", "refresh_token").empty());
+            CHECK(second.Token() == "AT-interactive");
+            CHECK(c.acquired == 2 && c.refreshed == 0);
+        }
     }
 
     fs::remove_all(base);

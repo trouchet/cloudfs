@@ -23,6 +23,11 @@ static const char* const kSensitiveKeys[] = {
 // is left out of the fingerprint that decides when to rebuild an auth provider.
 static const char* const kRefreshTokenKey = "refresh_token";
 
+// Optional BOOLEAN option of interactive OAuth providers.  PERSIST_TOKEN false
+// keeps the refresh token out of the stored secret: nothing long-lived is
+// written to disk, at the price of authorizing again in every new process.
+static const char* const kPersistTokenKey = "persist_token";
+
 // ─── Per-database state ───────────────────────────────────────────────────────
 // CREATE SECRET functions are plain function pointers, so they cannot capture
 // the registry they belong to.  The registry is published in the database's
@@ -104,7 +109,8 @@ void CloudSecretRegistry::Register(ExtensionLoader& loader, const std::string& s
     f.provider = provider;
     f.function = CreateCloudSecret;
     for (auto& p : named_params)
-        f.named_parameters[p] = LogicalType::VARCHAR;
+        f.named_parameters[p] =
+            StringUtil::Lower(p) == kPersistTokenKey ? LogicalType::BOOLEAN : LogicalType::VARCHAR;
     loader.RegisterFunction(std::move(f));
 }
 
@@ -255,6 +261,10 @@ void CloudSecretRegistry::PersistRefreshToken(const SecretRef& ref,
         auto* kv = dynamic_cast<const KeyValueSecret*>(entry->secret.get());
         if (!kv)
             return;
+        Value persist;
+        if (kv->TryGetValue(kPersistTokenKey, persist) && !persist.IsNull() &&
+            !persist.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>())
+            return; // the user opted out of storing the token
         auto updated = make_uniq<KeyValueSecret>(*kv);
         updated->secret_map[kRefreshTokenKey] = Value(refresh_token);
         updated->redact_keys.insert(kRefreshTokenKey);

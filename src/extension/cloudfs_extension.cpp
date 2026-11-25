@@ -37,18 +37,23 @@ static const char* const kGraphDefaultScope = "https://graph.microsoft.com/.defa
 // secret is created (to validate it) and again, lazily, the first time a path
 // matching the secret is accessed; see CloudSecretRegistry.
 // The first provider registered for a type is its default.
+//
+// The interactive "oauth" providers also accept PERSIST_TOKEN (BOOLEAN, default
+// true): when the secret is PERSISTENT, the refresh token obtained at login is
+// stored in it so later processes do not prompt again.  PERSIST_TOKEN false
+// keeps that token in memory only.
 // ─────────────────────────────────────────────────────────────────────────────
 static void RegisterSecretProviders(ExtensionLoader& loader, CloudSecretRegistry& secrets) {
     using AuthPtr = std::shared_ptr<ICloudAuthProvider>;
 
     // ── SharePoint ────────────────────────────────────────────────────────────
-    secrets.Register(loader, "sharepoint", "oauth", {"tenant_id", "client_id", "scope"},
-                     [](const SecretParams& p) -> AuthPtr {
-                         return std::make_shared<SharePointDeviceCodeAuth>(
-                             p.GetOr("tenant_id", "common"),
-                             p.GetOr("client_id", kAzureCliClientId),
-                             p.GetOr("scope", kGraphDefaultScope));
-                     });
+    secrets.Register(
+        loader, "sharepoint", "oauth", {"tenant_id", "client_id", "scope", "persist_token"},
+        [](const SecretParams& p) -> AuthPtr {
+            return std::make_shared<SharePointDeviceCodeAuth>(
+                p.GetOr("tenant_id", "common"), p.GetOr("client_id", kAzureCliClientId),
+                p.GetOr("scope", kGraphDefaultScope));
+        });
     secrets.Register(loader, "sharepoint", "token", {"tenant_id", "client_id", "scope", "token"},
                      [](const SecretParams& p) -> AuthPtr {
                          return std::make_shared<StaticTokenAuth>(
@@ -66,7 +71,7 @@ static void RegisterSecretProviders(ExtensionLoader& loader, CloudSecretRegistry
                      });
 
     // ── OneDrive ──────────────────────────────────────────────────────────────
-    secrets.Register(loader, "onedrive", "oauth", {"tenant_id", "client_id"},
+    secrets.Register(loader, "onedrive", "oauth", {"tenant_id", "client_id", "persist_token"},
                      [](const SecretParams& p) -> AuthPtr {
                          return std::make_shared<OneDriveAuth>(
                              p.GetOr("tenant_id", "common"),
@@ -87,7 +92,7 @@ static void RegisterSecretProviders(ExtensionLoader& loader, CloudSecretRegistry
                      });
 
     // ── Google Drive ──────────────────────────────────────────────────────────
-    secrets.Register(loader, "gdrive", "oauth", {"client_id", "client_secret"},
+    secrets.Register(loader, "gdrive", "oauth", {"client_id", "client_secret", "persist_token"},
                      [](const SecretParams& p) -> AuthPtr {
                          return std::make_shared<GDriveOAuthProvider>(p.Get("client_id"),
                                                                       p.Get("client_secret"));
@@ -102,7 +107,7 @@ static void RegisterSecretProviders(ExtensionLoader& loader, CloudSecretRegistry
     });
 
     // ── Dropbox ───────────────────────────────────────────────────────────────
-    secrets.Register(loader, "dropbox", "oauth", {"app_key", "app_secret"},
+    secrets.Register(loader, "dropbox", "oauth", {"app_key", "app_secret", "persist_token"},
                      [](const SecretParams& p) -> AuthPtr {
                          return std::make_shared<DropboxOAuthProvider>(p.Get("app_key"),
                                                                        p.Get("app_secret"));
