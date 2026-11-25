@@ -128,10 +128,19 @@ repos:
     hooks:
       - id: go-fmt
         files: 'agent/.*\.go$'
-      - id: go-vet
-        files: 'agent/.*\.go$'
       - id: go-mod-tidy
         files: 'agent/go\.(mod|sum)$'
+
+  # The upstream go-vet hook assumes go.mod sits at the repository root; the Go
+  # module here lives in agent/, so run vet from there.
+  - repo: local
+    hooks:
+      - id: go-vet
+        name: go vet (agent)
+        entry: bash -c 'cd agent && go vet ./...'
+        language: system
+        files: 'agent/.*\.go$'
+        pass_filenames: false
 
 # ============================================================================
 # Global Configuration
