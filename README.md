@@ -124,8 +124,17 @@ SELECT * FROM du('odfs://me/Projects/');
 | `sftp`       | `password`           | `PASSWORD`, `HOST`, `USER`                          |
 | `vfs`        | `token`              | `TOKEN`                                             |
 
-The `oauth` providers use the device code flow: the first access prints a URL
-and a code on stderr and waits for you to authorize in a browser.
+The `oauth` providers are interactive: the first access prints a URL (and a
+code) on stderr and waits for you to authorize in a browser. They also accept
+`PERSIST_TOKEN` (default `true`); see
+[Getting Credentials](docs/CREDENTIALS.md).
+
+**Where do these values come from?** [docs/CREDENTIALS.md](docs/CREDENTIALS.md)
+walks through each provider with links to the vendor's instructions.
+
+Secrets are looked up by path on every access: `CREATE PERSISTENT SECRET`
+survives restarts, `DROP SECRET` takes effect immediately, and `SCOPE` lets
+several secrets of the same type coexist.
 
 ### Utility Functions
 
@@ -138,25 +147,20 @@ SELECT cloudfs_clear_cache('spfs'); -- drop cached metadata for one scheme
 
 ## ⚠️ Known Limitations
 
-These are tracked in the
-[v0.2.0 milestone](https://github.com/trouchet/cloudfs/milestone/1):
-
-- **Secrets are bound at `CREATE SECRET` time.** Persistent secrets are not
-  picked up after a restart, `DROP SECRET` does not revoke access, and `SCOPE`
-  is ignored: the last secret created for a type wins
-  ([#17](https://github.com/trouchet/cloudfs/issues/17)).
-- **One database per process.** Loading the extension into a second DuckDB
-  database in the same process is not supported
-  ([#18](https://github.com/trouchet/cloudfs/issues/18)).
-- **Listing errors look like "no files found".** Authentication and network
-  failures during glob expansion are not reported as such
-  ([#19](https://github.com/trouchet/cloudfs/issues/19)).
-- **Special characters in names.** File and folder names containing spaces,
-  quotes, `#` or `%` may fail on some providers
-  ([#20](https://github.com/trouchet/cloudfs/issues/20)).
-- **Writes are buffered in memory.** A file written with `COPY ... TO` is held
-  entirely in memory until it is closed
-  ([#21](https://github.com/trouchet/cloudfs/issues/21)).
+- **Google Drive interactive login does not work yet.** `gdrive` with
+  `PROVIDER oauth` uses a flow for which Google does not allow the full Drive
+  scope ([#40](https://github.com/trouchet/cloudfs/issues/40)). Use
+  `service_account` or `token`.
+- **Google service accounts can only write into shared drives.** They can read
+  anything shared with them, but Google gives them no storage of their own.
+- **Only the VFS backend is tested end to end.** The SharePoint, OneDrive,
+  Google Drive, Dropbox and SFTP backends are covered by unit tests of their
+  shared code paths, not by tests against the real services.
+- **Writes are sequential.** A file is uploaded as it is written and becomes
+  visible when it is closed; random-access writes are rejected.
+- **Persistent secrets are stored unencrypted** by DuckDB, including the OAuth
+  refresh token CloudFS keeps for persistent `oauth` secrets (opt out with
+  `PERSIST_TOKEN false`).
 
 ## 📁 Project Structure
 
@@ -198,6 +202,8 @@ See [docs/adding_a_provider.md](docs/adding_a_provider.md) to add a backend.
 
 **First time?** Start here → [docs/START_HERE.md](docs/START_HERE.md)
 
+- **[Getting Credentials](docs/CREDENTIALS.md)** - Where each provider's
+  credentials come from
 - **[Setup Guide](docs/SETUP_GUIDE.md)** - Comprehensive setup instructions
 - **[Build Quickstart](docs/BUILD_QUICKSTART.md)** - Detailed build instructions
 - **[SharePoint Quickstart](docs/QUICKSTART_SHAREPOINT.md)** - SharePoint
@@ -255,8 +261,16 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for complete guidelines.
 # SQL tests (no credentials needed)
 make test
 
-# VFS round-trip suite (needs the built extension and cloudfs-agent)
+# Integration suite through vfs:// (needs the built extension, Go, and the
+# DuckDB Python package matching the build)
 python3 test/test_suite.py
+
+# Unit tests: request/response helpers, then upload and OAuth persistence
+make -C test/cpp
+make -C test/cpp upload oauth
+
+# Agent tests
+(cd agent && go test ./...)
 ```
 
 To try the VFS backend by hand, build and start the agent, then point DuckDB at
