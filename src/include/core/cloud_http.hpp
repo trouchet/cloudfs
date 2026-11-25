@@ -137,15 +137,25 @@ struct UrlUtil {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JsonUtil
-// Minimal JSON extraction — avoids a heavy dependency for simple API responses.
-// For complex responses, providers can link nlohmann/json or simdjson.
+// Reading: typed accessors over a JSON document, parsed with yyjson.  A key is
+// always looked up in the top-level object of `json`; invalid JSON or a missing
+// key yields the empty/zero value.
+// Writing: escaping helpers for building request bodies.
 // ─────────────────────────────────────────────────────────────────────────────
 struct JsonUtil {
+    // Strings are returned unescaped; numbers and booleans as text; objects and
+    // arrays as JSON text (so "is the key present" checks keep working).
     static std::string GetString(const std::string& json, const std::string& key);
+    // Accepts JSON numbers and numeric strings.
     static int64_t GetInt64(const std::string& json, const std::string& key);
     static bool GetBool(const std::string& json, const std::string& key);
-    // Extract array of raw JSON objects from "key": [{...}, {...}]
+    // True when `key` holds a JSON object (e.g. the "folder" facet of a Graph item).
+    static bool HasObject(const std::string& json, const std::string& key);
+    // Elements of the array at `key`, each as JSON text, for use with the
+    // accessors above:  for (auto& item : GetArray(body, "files")) GetString(item, "id")
     static std::vector<std::string> GetArray(const std::string& json, const std::string& key);
+    // Elements of an array of strings, unescaped.
+    static std::vector<std::string> GetStringArray(const std::string& json, const std::string& key);
     // Safe JSON string builder with proper escaping
     static std::string MakeObject(const std::vector<std::pair<std::string, std::string>>& kv);
     // Escape a string for safe inclusion in JSON (handles quotes, backslashes, control chars)

@@ -265,28 +265,9 @@ bool GDriveBackend::MoveItem(const std::string&, const CloudItem& src_item,
         err = "move: failed to fetch file metadata (" + std::to_string(meta_resp.status) + ")";
         return false;
     }
-    // Safely extract all parent IDs from JSON array ["id1","id2",...]
     std::string remove_parents;
-    {
-        const auto& body = meta_resp.body;
-        auto p_pos = body.find("\"parents\"");
-        auto arr_start = (p_pos != std::string::npos) ? body.find('[', p_pos) : std::string::npos;
-        auto arr_end =
-            (arr_start != std::string::npos) ? body.find(']', arr_start) : std::string::npos;
-        for (size_t i = (arr_start != std::string::npos ? arr_start + 1 : body.size());
-             arr_end != std::string::npos && i < arr_end;) {
-            auto q1 = body.find('"', i);
-            if (q1 == std::string::npos || q1 >= arr_end)
-                break;
-            auto q2 = body.find('"', q1 + 1);
-            if (q2 == std::string::npos || q2 >= arr_end)
-                break;
-            if (!remove_parents.empty())
-                remove_parents += ",";
-            remove_parents += body.substr(q1 + 1, q2 - q1 - 1);
-            i = q2 + 1;
-        }
-    }
+    for (auto& parent : JsonUtil::GetStringArray(meta_resp.body, "parents"))
+        remove_parents += (remove_parents.empty() ? "" : ",") + parent;
 
     std::string url = kApiBase + "/files/" + src_item.id + "?supportsAllDrives=true";
     if (!remove_parents.empty())

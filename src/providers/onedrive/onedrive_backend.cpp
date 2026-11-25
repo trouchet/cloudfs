@@ -57,7 +57,7 @@ bool OneDriveBackend::Stat(const std::string& root, const std::string& path, con
     out.etag = JsonUtil::GetString(resp.body, "eTag");
     out.download_url = JsonUtil::GetString(resp.body, "@microsoft.graph.downloadUrl");
     out.path = path;
-    out.is_folder = (resp.body.find("\"folder\":{") != std::string::npos);
+    out.is_folder = JsonUtil::HasObject(resp.body, "folder");
     return true;
 }
 
@@ -100,7 +100,7 @@ bool OneDriveBackend::ListFolder(const std::string& root, const std::string& fol
         c.name = JsonUtil::GetString(j, "name");
         c.size = JsonUtil::GetInt64(j, "size");
         c.etag = JsonUtil::GetString(j, "eTag");
-        c.is_folder = (j.find("\"folder\":{") != std::string::npos);
+        c.is_folder = JsonUtil::HasObject(j, "folder");
         cb(c);
     }
     cursor = JsonUtil::GetString(resp.body, "@odata.nextLink");

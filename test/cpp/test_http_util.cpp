@@ -71,6 +71,51 @@ int main() {
               "{\"name\":" + JsonUtil::QuoteAscii("it's 50%#& \xC3\xB1 \"q\"") + "}", "name"),
           "it's 50%#& \xC3\xB1 \"q\"");
 
+    // ── JsonUtil: reading ────────────────────────────────────────────────────
+    // A nested "id" that comes first in the text must not shadow the real one.
+    const std::string item = R"({"createdBy":{"user":{"id":"NESTED"}},"id":"TOP","name":"n",)"
+                             R"("size":"12345678901","folder":{"childCount":2},"ok":true,"n":7})";
+    Check("top-level key wins", JsonUtil::GetString(item, "id"), "TOP");
+    Check("numeric string", std::to_string(JsonUtil::GetInt64(item, "size")), "12345678901");
+    Check("number", std::to_string(JsonUtil::GetInt64(item, "n")), "7");
+    Check("number as text", JsonUtil::GetString(item, "n"), "7");
+    Check("bool", JsonUtil::GetBool(item, "ok") ? "t" : "f", "t");
+    Check("missing bool", JsonUtil::GetBool(item, "nope") ? "t" : "f", "f");
+    Check("has object", JsonUtil::HasObject(item, "folder") ? "t" : "f", "t");
+    Check("has object: scalar", JsonUtil::HasObject(item, "name") ? "t" : "f", "f");
+    Check("has object: missing", JsonUtil::HasObject(item, "file") ? "t" : "f", "f");
+    Check("object as text is non-empty", JsonUtil::GetString(item, "folder").empty() ? "e" : "x",
+          "x");
+    Check("missing key", JsonUtil::GetString(item, "nope"), "");
+    Check("null value", JsonUtil::GetString(R"({"a":null})", "a"), "");
+    Check("invalid json", JsonUtil::GetString("{\"a\":", "a"), "");
+    Check("not an object", JsonUtil::GetString("[1,2]", "a"), "");
+    // A key name inside a string value is not a key.
+    Check("key inside string", JsonUtil::GetString(R"({"note":"\"id\":\"x\"","id":"real"})", "id"),
+          "real");
+
+    // Arrays: braces and brackets inside names must not break item splitting.
+    const std::string listing =
+        R"({"files":[{"id":"1","name":"a}b]{.csv"},{"id":"2","name":"q\"x"}],"nextPageToken":"t"})";
+    auto files = JsonUtil::GetArray(listing, "files");
+    Check("array size", std::to_string(files.size()), "2");
+    if (files.size() == 2) {
+        Check("array item 0 name", JsonUtil::GetString(files[0], "name"), "a}b]{.csv");
+        Check("array item 1 name", JsonUtil::GetString(files[1], "name"), "q\"x");
+        Check("array item 1 id", JsonUtil::GetString(files[1], "id"), "2");
+    }
+    Check("sibling of array", JsonUtil::GetString(listing, "nextPageToken"), "t");
+    Check("missing array", std::to_string(JsonUtil::GetArray(listing, "nope").size()), "0");
+    auto parents = JsonUtil::GetStringArray(R"({"parents":["p1","p\"2"]})", "parents");
+    Check("string array size", std::to_string(parents.size()), "2");
+    if (parents.size() == 2)
+        Check("string array item", parents[1], "p\"2");
+
+    // PEM newlines survive (service account key files).
+    Check("escaped newline",
+          JsonUtil::GetString(R"({"private_key":"-----BEGIN-----\nAB\n"})", "private_key"),
+          "-----BEGIN-----\nAB\n");
+
     if (g_failures) {
         std::fprintf(stderr, "%d check(s) failed\n", g_failures);
         return 1;

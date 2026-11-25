@@ -10,9 +10,15 @@ BUILD := $(ROOT)/build/release
 test: $(OUT)/test_http_util
 	$(OUT)/test_http_util
 
+# cloud_http.cpp parses JSON with the yyjson copy vendored by DuckDB, which
+# includes a few header-only DuckDB helpers.
+YYJSON := $(ROOT)/duckdb/third_party/yyjson
+
 $(OUT)/test_http_util: test_http_util.cpp $(ROOT)/src/core/cloud_http.cpp $(ROOT)/src/include/core/cloud_http.hpp
 	@mkdir -p $(OUT)
-	$(CXX) -std=c++17 -Wall -Wextra -I$(ROOT)/src/include $< $(ROOT)/src/core/cloud_http.cpp -lcurl -o $@
+	$(CXX) -std=c++17 -Wall -Wextra -I$(ROOT)/src/include -I$(YYJSON)/include \
+		-I$(ROOT)/duckdb/src/include $< \
+		$(ROOT)/src/core/cloud_http.cpp $(YYJSON)/yyjson.cpp -lcurl -o $@
 
 # Needs a finished release build (links the static extension and libduckdb).
 upload: $(OUT)/test_upload

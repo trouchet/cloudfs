@@ -1,5 +1,7 @@
 #include "core/cloud_http.hpp"
 
+#include "yyjson.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -332,171 +334,125 @@ std::string UrlUtil::BuildQuery(const std::vector<std::pair<std::string, std::st
 }
 
 // ─── JsonUtil ─────────────────────────────────────────────────────────────────
-// Parse four hex digits at json[at..at+3] into out.
-static bool ReadHex4(const std::string& json, size_t at, unsigned& out) {
-    if (at + 4 > json.size())
-        return false;
-    unsigned v = 0;
-    for (size_t i = at; i < at + 4; ++i) {
-        char c = json[i];
-        v <<= 4;
-        if (c >= '0' && c <= '9')
-            v |= (unsigned)(c - '0');
-        else if (c >= 'a' && c <= 'f')
-            v |= (unsigned)(c - 'a' + 10);
-        else if (c >= 'A' && c <= 'F')
-            v |= (unsigned)(c - 'A' + 10);
-        else
-            return false;
+// ─── JsonUtil: reading ────────────────────────────────────────────────────────
+// Responses are parsed with yyjson (vendored by DuckDB).  Every accessor looks
+// the key up in the TOP-LEVEL object only, so a nested object or a string that
+// happens to contain the key name can never shadow the field being read.
+namespace {
+
+using namespace duckdb_yyjson; // NOLINT
+
+class JsonDoc {
+  public:
+    explicit JsonDoc(const std::string& json)
+        : doc_(yyjson_read(json.data(), json.size(), YYJSON_READ_NOFLAG)) {}
+    ~JsonDoc() {
+        if (doc_)
+            yyjson_doc_free(doc_);
     }
-    out = v;
-    return true;
+    JsonDoc(const JsonDoc&) = delete;
+    JsonDoc& operator=(const JsonDoc&) = delete;
+
+    // Member `key` of the root object, or nullptr (also for invalid JSON).
+    yyjson_val* Get(const std::string& key) const {
+        if (!doc_)
+            return nullptr;
+        yyjson_val* root = yyjson_doc_get_root(doc_);
+        if (!yyjson_is_obj(root))
+            return nullptr;
+        return yyjson_obj_getn(root, key.data(), key.size());
+    }
+
+  private:
+    yyjson_doc* doc_;
+};
+
+std::string Serialize(yyjson_val* val) {
+    size_t len = 0;
+    char* raw = yyjson_val_write(val, YYJSON_WRITE_NOFLAG, &len);
+    if (!raw)
+        return "";
+    std::string out(raw, len);
+    free(raw);
+    return out;
 }
 
-static void AppendUtf8(std::string& out, unsigned cp) {
-    if (cp < 0x80) {
-        out += (char)cp;
-    } else if (cp < 0x800) {
-        out += (char)(0xC0 | (cp >> 6));
-        out += (char)(0x80 | (cp & 0x3F));
-    } else if (cp < 0x10000) {
-        out += (char)(0xE0 | (cp >> 12));
-        out += (char)(0x80 | ((cp >> 6) & 0x3F));
-        out += (char)(0x80 | (cp & 0x3F));
-    } else {
-        out += (char)(0xF0 | (cp >> 18));
-        out += (char)(0x80 | ((cp >> 12) & 0x3F));
-        out += (char)(0x80 | ((cp >> 6) & 0x3F));
-        out += (char)(0x80 | (cp & 0x3F));
-    }
+// Text of a value: strings unquoted and unescaped, scalars as written,
+// objects and arrays as JSON.  null and missing are "".
+std::string ToText(yyjson_val* val) {
+    if (!val || yyjson_is_null(val))
+        return "";
+    if (yyjson_is_str(val))
+        return std::string(yyjson_get_str(val), yyjson_get_len(val));
+    if (yyjson_is_bool(val))
+        return yyjson_get_bool(val) ? "true" : "false";
+    return Serialize(val);
 }
+
+} // namespace
 
 std::string JsonUtil::GetString(const std::string& json, const std::string& key) {
-    auto search = "\"" + key + "\"";
-    auto pos = json.find(search);
-    if (pos == std::string::npos)
-        return "";
-    pos = json.find(':', pos + search.size());
-    if (pos == std::string::npos)
-        return "";
-    while (++pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
-        ;
-    if (pos >= json.size() || json[pos] != '"')
-        return "";
-    ++pos;
-    std::string val;
-    while (pos < json.size() && json[pos] != '"') {
-        if (json[pos] == '\\' && pos + 1 < json.size()) {
-            ++pos;
-            switch (json[pos]) {
-            case '"':
-                val += '"';
-                break;
-            case '\\':
-                val += '\\';
-                break;
-            case 'n':
-                val += '\n';
-                break;
-            case 'r':
-                val += '\r';
-                break;
-            case 't':
-                val += '\t';
-                break;
-            case 'b':
-                val += '\b';
-                break;
-            case 'f':
-                val += '\f';
-                break;
-            case 'u': {
-                // \uXXXX, possibly the first half of a UTF-16 surrogate pair.
-                unsigned cp = 0;
-                if (!ReadHex4(json, pos + 1, cp)) {
-                    val += 'u'; // malformed escape: keep it visible
-                    break;
-                }
-                pos += 4;
-                unsigned low = 0;
-                if (cp >= 0xD800 && cp <= 0xDBFF && pos + 2 < json.size() &&
-                    json[pos + 1] == '\\' && json[pos + 2] == 'u' && ReadHex4(json, pos + 3, low) &&
-                    low >= 0xDC00 && low <= 0xDFFF) {
-                    cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
-                    pos += 6;
-                }
-                AppendUtf8(val, cp);
-                break;
-            }
-            default:
-                val += json[pos];
-                break;
-            }
-        } else
-            val += json[pos];
-        ++pos;
-    }
-    return val;
+    JsonDoc doc(json);
+    return ToText(doc.Get(key));
 }
 
 int64_t JsonUtil::GetInt64(const std::string& json, const std::string& key) {
-    auto search = "\"" + key + "\"";
-    auto pos = json.find(search);
-    if (pos == std::string::npos)
+    JsonDoc doc(json);
+    yyjson_val* val = doc.Get(key);
+    if (!val)
         return 0;
-    pos = json.find(':', pos + search.size());
-    if (pos == std::string::npos)
-        return 0;
-    while (++pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
-        ;
-    return (int64_t)strtoll(json.c_str() + pos, nullptr, 10);
+    if (yyjson_is_sint(val))
+        return yyjson_get_sint(val);
+    if (yyjson_is_uint(val))
+        return (int64_t)yyjson_get_uint(val);
+    if (yyjson_is_real(val))
+        return (int64_t)yyjson_get_real(val);
+    if (yyjson_is_str(val)) // some APIs send 64-bit numbers as strings (Drive "size")
+        return (int64_t)strtoll(yyjson_get_str(val), nullptr, 10);
+    return 0;
 }
 
 bool JsonUtil::GetBool(const std::string& json, const std::string& key) {
-    auto search = "\"" + key + "\"";
-    auto pos = json.find(search);
-    if (pos == std::string::npos)
+    JsonDoc doc(json);
+    yyjson_val* val = doc.Get(key);
+    if (!val)
         return false;
-    pos = json.find(':', pos + search.size());
-    if (pos == std::string::npos)
-        return false;
-    while (++pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
-        ;
-    return json.substr(pos, 4) == "true";
+    if (yyjson_is_bool(val))
+        return yyjson_get_bool(val);
+    return yyjson_is_str(val) && std::string(yyjson_get_str(val), yyjson_get_len(val)) == "true";
+}
+
+bool JsonUtil::HasObject(const std::string& json, const std::string& key) {
+    JsonDoc doc(json);
+    return yyjson_is_obj(doc.Get(key));
 }
 
 std::vector<std::string> JsonUtil::GetArray(const std::string& json, const std::string& key) {
     std::vector<std::string> items;
-    auto search = "\"" + key + "\"";
-    auto pos = json.find(search);
-    if (pos == std::string::npos)
+    JsonDoc doc(json);
+    yyjson_val* arr = doc.Get(key);
+    if (!yyjson_is_arr(arr))
         return items;
-    pos = json.find('[', pos);
-    if (pos == std::string::npos)
-        return items;
-    int depth = 0;
-    std::string cur;
-    for (size_t i = pos + 1; i < json.size(); ++i) { // start AFTER the [
-        char ch = json[i];
-        if (ch == '{') {
-            if (depth == 0)
-                cur.clear(); // starting a new top-level item
-            cur += ch;
-            ++depth;
-        } else if (ch == '}') {
-            cur += ch;
-            --depth;
-            if (depth == 0)
-                items.push_back(cur); // finished a top-level item
-        } else if (ch == ']' && depth == 0) {
-            break;
-        } else if (depth > 0) {
-            cur += ch;
-        }
-    }
+    items.reserve(yyjson_arr_size(arr));
+    size_t idx, max;
+    yyjson_val* elem;
+    yyjson_arr_foreach(arr, idx, max, elem) items.push_back(Serialize(elem));
     return items;
 }
 
+std::vector<std::string> JsonUtil::GetStringArray(const std::string& json, const std::string& key) {
+    std::vector<std::string> items;
+    JsonDoc doc(json);
+    yyjson_val* arr = doc.Get(key);
+    if (!yyjson_is_arr(arr))
+        return items;
+    size_t idx, max;
+    yyjson_val* elem;
+    yyjson_arr_foreach(arr, idx, max, elem) items.push_back(ToText(elem));
+    return items;
+}
+
+// ─── JsonUtil: writing ────────────────────────────────────────────────────────
 std::string JsonUtil::MakeObject(const std::vector<std::pair<std::string, std::string>>& kv) {
     std::string s = "{";
     for (size_t i = 0; i < kv.size(); ++i) {
