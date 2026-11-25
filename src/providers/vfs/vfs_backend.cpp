@@ -41,7 +41,7 @@ bool VFSBackend::Stat(const std::string& root, const std::string& path, const st
     std::string url = root + "/v1/stat?" + UrlUtil::BuildQuery({{"path", path}});
     auto resp = http_.Get(url, token);
     if (resp.status == 404) {
-        err = "not found: " + path;
+        err = CloudError::NotFound(path);
         return false;
     }
     if (!resp.ok()) {

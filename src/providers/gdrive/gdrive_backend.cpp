@@ -57,7 +57,7 @@ bool GDriveBackend::ResolvePathWalk(const std::string& start_folder_id,
 
         auto files = JsonUtil::GetArray(resp.body, "files");
         if (files.empty()) {
-            err = "not found: /" + seg;
+            err = CloudError::NotFound("/" + seg);
             return false;
         }
 

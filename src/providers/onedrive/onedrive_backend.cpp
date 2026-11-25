@@ -43,7 +43,7 @@ bool OneDriveBackend::Stat(const std::string& root, const std::string& path, con
                       "?$select=id,name,size,eTag,folder,file,@microsoft.graph.downloadUrl";
     auto resp = http_.Get(url, tok);
     if (resp.status == 404) {
-        err = "not found: " + path;
+        err = CloudError::NotFound(path);
         return false;
     }
     if (!resp.ok()) {
