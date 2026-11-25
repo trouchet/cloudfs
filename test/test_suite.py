@@ -288,7 +288,10 @@ class ReadTest(CloudfsTest):
         )
 
     def test_ls_pattern(self):
-        names = {r[0] for r in self.q(f"SELECT name FROM ls('{self.base}/data/', pattern := '*.parquet') WHERE type = 'file'")}
+        names = {
+            r[0]
+            for r in self.q(f"SELECT name FROM ls('{self.base}/data/', pattern := '*.parquet') WHERE type = 'file'")
+        }
         self.assertEqual(names, {"rows.parquet", "rows2.parquet"})
 
     def test_ls_paginated_and_empty_folders(self):
@@ -362,10 +365,7 @@ class WriteTest(CloudfsTest):
     def test_upload_spanning_many_chunks(self):
         # ~39 MB of CSV: several 8 MiB chunks, so the streaming path is used.
         rows = 300_000
-        self.q(
-            f"COPY (SELECT i AS id, repeat('x', 100) AS pad FROM range({rows}) t(i)) "
-            f"TO '{self.base}/out/big.csv'"
-        )
+        self.q(f"COPY (SELECT i AS id, repeat('x', 100) AS pad FROM range({rows}) t(i)) TO '{self.base}/out/big.csv'")
         size = os.path.getsize(os.path.join(self.root, "out", "big.csv"))
         self.assertGreater(size, 3 * 8 * 1024 * 1024)
         self.assertEqual(self.q(f"SELECT size FROM stat('{self.base}/out/big.csv')"), [(size,)])
