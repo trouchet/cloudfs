@@ -66,15 +66,14 @@ class CloudFileSystem : public FileSystem {
     ICloudBackend* BackendForPublic(const std::string& url) { return BackendForNoThrow(url); }
     // Resolve root_id for a (backend, raw_root) pair, caching the result
     bool GetRootIdPublic(ICloudBackend* b, const std::string& raw_root, std::string& out_token,
-                         std::string& out_root_id) {
-        std::string err;
+                         std::string& out_root_id, std::string& out_err) {
         if (cache_.GetRootId(b->Scheme(), raw_root, out_root_id)) {
-            GetTokenPublic(b->Scheme(), out_token, err);
+            GetTokenPublic(b->Scheme(), out_token, out_err);
             return true;
         }
-        if (!GetToken(b->Scheme(), out_token, err))
+        if (!GetToken(b->Scheme(), out_token, out_err))
             return false;
-        if (!b->ResolveRoot(raw_root, out_token, out_root_id, err))
+        if (!b->ResolveRoot(raw_root, out_token, out_root_id, out_err))
             return false;
         cache_.PutRootId(b->Scheme(), raw_root, out_root_id);
         return true;
