@@ -54,7 +54,7 @@ bool DropboxBackend::Stat(const std::string&, const std::string& path, const std
     req.url = std::string(kApiBase) + "/files/get_metadata";
     req.SetBearerAuth(tok);
     req.headers["Content-Type"] = "application/json";
-    req.body = "{\"path\":\"" + path + "\"}";
+    req.body = "{\"path\":" + JsonUtil::Quote(path) + "}";
     auto resp = http_.Execute(req);
     if (resp.status == 409) {
         err = CloudError::NotFound(path);
@@ -82,7 +82,7 @@ int64_t DropboxBackend::ReadRange(const CloudItem& item, const std::string&, con
     HttpRequest req;
     req.url = url;
     req.SetBearerAuth(tok);
-    req.headers["Dropbox-API-Arg"] = "{\"path\":\"" + item.path + "\"}";
+    req.headers["Dropbox-API-Arg"] = "{\"path\":" + JsonUtil::QuoteAscii(item.path) + "}";
     char range_hdr[64];
     snprintf(range_hdr, sizeof(range_hdr), "bytes=%lld-%lld", (long long)off,
              (long long)(off + len - 1));
@@ -99,7 +99,7 @@ bool DropboxBackend::RefreshDownloadUrl(const CloudItem& item, const std::string
     req.url = std::string(kApiBase) + "/files/get_temporary_link";
     req.SetBearerAuth(tok);
     req.headers["Content-Type"] = "application/json";
-    req.body = "{\"path\":\"" + item.path + "\"}";
+    req.body = "{\"path\":" + JsonUtil::Quote(item.path) + "}";
     auto resp = http_.Execute(req);
     if (!resp.ok()) {
         err = "get_temporary_link failed";
@@ -120,11 +120,12 @@ bool DropboxBackend::ListFolder(const std::string&, const std::string& folder_id
 
     if (cursor.empty()) {
         req.url = std::string(kApiBase) + "/files/list_folder";
-        req.body = "{\"path\":\"" + (folder_id == "root" || folder_id.empty() ? "" : folder_id) +
-                   "\",\"recursive\":false,\"limit\":2000}";
+        req.body = "{\"path\":" +
+                   JsonUtil::Quote(folder_id == "root" || folder_id.empty() ? "" : folder_id) +
+                   ",\"recursive\":false,\"limit\":2000}";
     } else {
         req.url = std::string(kApiBase) + "/files/list_folder/continue";
-        req.body = "{\"cursor\":\"" + cursor + "\"}";
+        req.body = "{\"cursor\":" + JsonUtil::Quote(cursor) + "}";
     }
 
     auto resp = http_.Execute(req);
@@ -151,8 +152,9 @@ bool DropboxBackend::ListFolderRecursive(const std::string& root, const std::str
     req.SetBearerAuth(tok);
     req.headers["Content-Type"] = "application/json";
     req.url = std::string(kApiBase) + "/files/list_folder";
-    req.body = "{\"path\":\"" + (folder_id == "root" || folder_id.empty() ? "" : folder_id) +
-               "\",\"recursive\":true,\"limit\":2000}";
+    req.body =
+        "{\"path\":" + JsonUtil::Quote(folder_id == "root" || folder_id.empty() ? "" : folder_id) +
+        ",\"recursive\":true,\"limit\":2000}";
 
     do {
         auto resp = http_.Execute(req);
@@ -166,7 +168,7 @@ bool DropboxBackend::ListFolderRecursive(const std::string& root, const std::str
         if (!has_more)
             break;
         req.url = std::string(kApiBase) + "/files/list_folder/continue";
-        req.body = "{\"cursor\":\"" + JsonUtil::GetString(resp.body, "cursor") + "\"}";
+        req.body = "{\"cursor\":" + JsonUtil::Quote(JsonUtil::GetString(resp.body, "cursor")) + "}";
     } while (true);
     return true;
 }
@@ -202,17 +204,17 @@ bool DropboxBackend::UploadChunk(const CloudUploadSession& s, const char* data, 
 
     if (!last) {
         req.url = std::string(kContentBase) + "/files/upload_session/append_v2";
-        std::string arg = "{\"cursor\":{\"session_id\":\"" + s.upload_url +
-                          "\",\"offset\":" + std::to_string(off) + "},\"close\":false}";
+        std::string arg = "{\"cursor\":{\"session_id\":" + JsonUtil::QuoteAscii(s.upload_url) +
+                          ",\"offset\":" + std::to_string(off) + "},\"close\":false}";
         req.headers["Dropbox-API-Arg"] = arg;
     } else {
         req.url = std::string(kContentBase) + "/files/upload_session/finish";
-        std::string arg = "{\"cursor\":{\"session_id\":\"" + s.upload_url +
-                          "\",\"offset\":" + std::to_string(off) +
+        std::string arg = "{\"cursor\":{\"session_id\":" + JsonUtil::QuoteAscii(s.upload_url) +
+                          ",\"offset\":" + std::to_string(off) +
                           "},"
-                          "\"commit\":{\"path\":\"" +
-                          (s.item_id.empty() ? "/upload" : s.item_id) +
-                          "\",\"mode\":\"overwrite\"}}";
+                          "\"commit\":{\"path\":" +
+                          JsonUtil::QuoteAscii(s.item_id.empty() ? "/upload" : s.item_id) +
+                          ",\"mode\":\"overwrite\"}}";
         req.headers["Dropbox-API-Arg"] = arg;
     }
 
@@ -231,7 +233,7 @@ bool DropboxBackend::DeleteItem(const std::string&, const std::string& id, const
     req.SetBearerAuth(tok);
     req.headers["Content-Type"] = "application/json";
     req.url = std::string(kApiBase) + "/files/delete_v2";
-    req.body = "{\"path\":\"" + id + "\"}";
+    req.body = "{\"path\":" + JsonUtil::Quote(id) + "}";
     auto resp = http_.Execute(req);
     if (!resp.ok()) {
         err = "delete failed " + std::to_string(resp.status);
@@ -248,7 +250,7 @@ bool DropboxBackend::CreateFolder(const std::string&, const std::string& parent_
     req.SetBearerAuth(tok);
     req.headers["Content-Type"] = "application/json";
     req.url = std::string(kApiBase) + "/files/create_folder_v2";
-    req.body = "{\"path\":\"" + parent_id + "/" + name + "\",\"autorename\":false}";
+    req.body = "{\"path\":" + JsonUtil::Quote(parent_id + "/" + name) + ",\"autorename\":false}";
     auto resp = http_.Execute(req);
     if (!resp.ok()) {
         err = "create_folder failed";
@@ -268,8 +270,8 @@ bool DropboxBackend::CopyItem(const std::string&, const std::string& src_id,
     req.SetBearerAuth(tok);
     req.headers["Content-Type"] = "application/json";
     req.url = std::string(kApiBase) + "/files/copy_v2";
-    req.body =
-        "{\"from_path\":\"" + src_id + "\",\"to_path\":\"" + dst_parent_id + "/" + dst_name + "\"}";
+    req.body = "{\"from_path\":" + JsonUtil::Quote(src_id) +
+               ",\"to_path\":" + JsonUtil::Quote(dst_parent_id + "/" + dst_name) + "}";
     auto resp = http_.Execute(req);
     if (!resp.ok()) {
         err = "copy failed " + std::to_string(resp.status);

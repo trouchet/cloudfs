@@ -304,6 +304,21 @@ std::string UrlUtil::Encode(const std::string& s) {
     return result;
 }
 
+std::string UrlUtil::EncodePath(const std::string& path) {
+    std::string out;
+    size_t start = 0;
+    while (start <= path.size()) {
+        size_t slash = path.find('/', start);
+        if (slash == std::string::npos)
+            slash = path.size();
+        if (slash > start)
+            out += Encode(path.substr(start, slash - start));
+        if (slash < path.size())
+            out += '/';
+        start = slash + 1;
+    }
+    return out;
+}
 std::string UrlUtil::BuildQuery(const std::vector<std::pair<std::string, std::string>>& params) {
     if (params.empty())
         return "";
@@ -317,6 +332,45 @@ std::string UrlUtil::BuildQuery(const std::vector<std::pair<std::string, std::st
 }
 
 // ─── JsonUtil ─────────────────────────────────────────────────────────────────
+// Parse four hex digits at json[at..at+3] into out.
+static bool ReadHex4(const std::string& json, size_t at, unsigned& out) {
+    if (at + 4 > json.size())
+        return false;
+    unsigned v = 0;
+    for (size_t i = at; i < at + 4; ++i) {
+        char c = json[i];
+        v <<= 4;
+        if (c >= '0' && c <= '9')
+            v |= (unsigned)(c - '0');
+        else if (c >= 'a' && c <= 'f')
+            v |= (unsigned)(c - 'a' + 10);
+        else if (c >= 'A' && c <= 'F')
+            v |= (unsigned)(c - 'A' + 10);
+        else
+            return false;
+    }
+    out = v;
+    return true;
+}
+
+static void AppendUtf8(std::string& out, unsigned cp) {
+    if (cp < 0x80) {
+        out += (char)cp;
+    } else if (cp < 0x800) {
+        out += (char)(0xC0 | (cp >> 6));
+        out += (char)(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        out += (char)(0xE0 | (cp >> 12));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    } else {
+        out += (char)(0xF0 | (cp >> 18));
+        out += (char)(0x80 | ((cp >> 12) & 0x3F));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    }
+}
+
 std::string JsonUtil::GetString(const std::string& json, const std::string& key) {
     auto search = "\"" + key + "\"";
     auto pos = json.find(search);
@@ -350,6 +404,30 @@ std::string JsonUtil::GetString(const std::string& json, const std::string& key)
             case 't':
                 val += '\t';
                 break;
+            case 'b':
+                val += '\b';
+                break;
+            case 'f':
+                val += '\f';
+                break;
+            case 'u': {
+                // \uXXXX, possibly the first half of a UTF-16 surrogate pair.
+                unsigned cp = 0;
+                if (!ReadHex4(json, pos + 1, cp)) {
+                    val += 'u'; // malformed escape: keep it visible
+                    break;
+                }
+                pos += 4;
+                unsigned low = 0;
+                if (cp >= 0xD800 && cp <= 0xDBFF && pos + 2 < json.size() &&
+                    json[pos + 1] == '\\' && json[pos + 2] == 'u' && ReadHex4(json, pos + 3, low) &&
+                    low >= 0xDC00 && low <= 0xDFFF) {
+                    cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                    pos += 6;
+                }
+                AppendUtf8(val, cp);
+                break;
+            }
             default:
                 val += json[pos];
                 break;
@@ -427,6 +505,64 @@ std::string JsonUtil::MakeObject(const std::vector<std::pair<std::string, std::s
         s += "\"" + EscapeJsonString(kv[i].first) + "\":\"" + EscapeJsonString(kv[i].second) + "\"";
     }
     return s + "}";
+}
+
+std::string JsonUtil::Quote(const std::string& s) {
+    return "\"" + EscapeJsonString(s) + "\"";
+}
+
+std::string JsonUtil::QuoteAscii(const std::string& s) {
+    const std::string escaped = EscapeJsonString(s);
+    std::string out = "\"";
+    auto append_unit = [&out](unsigned unit) {
+        char buf[7];
+        snprintf(buf, sizeof(buf), "\\u%04x", unit);
+        out += buf;
+    };
+    for (size_t i = 0; i < escaped.size();) {
+        unsigned char c = (unsigned char)escaped[i];
+        if (c < 0x7F) {
+            out += (char)c;
+            ++i;
+            continue;
+        }
+        // Decode one UTF-8 sequence; malformed input becomes U+FFFD.
+        unsigned cp = 0xFFFD;
+        size_t len = 1;
+        if (c >= 0xC2 && c <= 0xDF)
+            len = 2, cp = c & 0x1F;
+        else if (c >= 0xE0 && c <= 0xEF)
+            len = 3, cp = c & 0x0F;
+        else if (c >= 0xF0 && c <= 0xF4)
+            len = 4, cp = c & 0x07;
+        else if (c == 0x7F)
+            cp = 0x7F;
+        if (len > 1) {
+            if (i + len > escaped.size()) {
+                cp = 0xFFFD;
+                len = 1;
+            } else {
+                for (size_t k = 1; k < len; ++k) {
+                    unsigned char cc = (unsigned char)escaped[i + k];
+                    if ((cc & 0xC0) != 0x80) {
+                        cp = 0xFFFD;
+                        len = 1;
+                        break;
+                    }
+                    cp = (cp << 6) | (cc & 0x3F);
+                }
+            }
+        }
+        if (cp >= 0x10000) { // outside the BMP: UTF-16 surrogate pair
+            cp -= 0x10000;
+            append_unit(0xD800 + (cp >> 10));
+            append_unit(0xDC00 + (cp & 0x3FF));
+        } else {
+            append_unit(cp);
+        }
+        i += len;
+    }
+    return out + "\"";
 }
 
 std::string JsonUtil::EscapeJsonString(const std::string& s) {

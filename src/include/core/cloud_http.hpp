@@ -128,6 +128,9 @@ class CloudHttpClient {
 struct UrlUtil {
     // Percent-encode a single string (for query params, path segments)
     static std::string Encode(const std::string& s);
+    // Percent-encode a slash-separated path segment by segment, keeping the
+    // slashes: "/Shared Documents/a#b.csv" → "/Shared%20Documents/a%23b.csv"
+    static std::string EncodePath(const std::string& path);
     // Build a query string from key-value pairs (returns "k1=v1&k2=v2")
     static std::string BuildQuery(const std::vector<std::pair<std::string, std::string>>& params);
 };
@@ -147,6 +150,13 @@ struct JsonUtil {
     static std::string MakeObject(const std::vector<std::pair<std::string, std::string>>& kv);
     // Escape a string for safe inclusion in JSON (handles quotes, backslashes, control chars)
     static std::string EscapeJsonString(const std::string& s);
+    // A complete JSON string literal, quotes included: abc → "abc".
+    // Use this for every user-controlled value placed in a request body.
+    static std::string Quote(const std::string& s);
+    // Like Quote(), but the result is pure ASCII: every non-ASCII character
+    // (and DEL) becomes a \uXXXX escape.  Required for JSON carried in an HTTP
+    // header, e.g. Dropbox-API-Arg.  Input is expected to be UTF-8.
+    static std::string QuoteAscii(const std::string& s);
 };
 
 } // namespace duckdb

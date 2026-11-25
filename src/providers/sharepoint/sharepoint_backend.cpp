@@ -57,7 +57,8 @@ bool SharePointBackend::ResolveRoot(const std::string& root, const std::string& 
     std::string site_path = root.substr(pipe + 1); // "/sites/SiteName"
 
     std::string hostname = base_url.substr(8); // "tenant.sharepoint.com"
-    std::string site_url = "https://graph.microsoft.com/v1.0/sites/" + hostname + ":" + site_path;
+    std::string site_url =
+        "https://graph.microsoft.com/v1.0/sites/" + hostname + ":" + UrlUtil::EncodePath(site_path);
 
     auto resp = http_.Get(site_url, tok);
     if (!resp.ok()) {
@@ -79,7 +80,8 @@ bool SharePointBackend::ResolveRoot(const std::string& root, const std::string& 
 // ─── Stat ─────────────────────────────────────────────────────────────────────
 bool SharePointBackend::Stat(const std::string& root, const std::string& path,
                              const std::string& tok, CloudItem& out, std::string& err) {
-    std::string url = "https://graph.microsoft.com/v1.0/drives/" + root + "/root:" + path +
+    std::string url = "https://graph.microsoft.com/v1.0/drives/" + root +
+                      "/root:" + UrlUtil::EncodePath(path) +
                       "?$select=id,name,size,eTag,folder,file,@microsoft.graph.downloadUrl";
     auto resp = http_.Get(url, tok);
     if (resp.status == 404) {
@@ -157,7 +159,7 @@ bool SharePointBackend::CreateUploadSession(const std::string& root, const std::
                                             const std::string& tok, CloudUploadSession& out,
                                             std::string& err) {
     std::string url = "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + parent_id +
-                      ":/" + name + ":/createUploadSession";
+                      ":/" + UrlUtil::Encode(name) + ":/createUploadSession";
     std::string body = "{\"item\":{\"@microsoft.graph.conflictBehavior\":\"replace\"}}";
     auto resp = http_.Post(url, tok, body);
     if (!resp.ok()) {
@@ -201,8 +203,8 @@ bool SharePointBackend::CreateFolder(const std::string& root, const std::string&
                                      CloudItem& out, std::string& err) {
     std::string url =
         "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + parent_id + "/children";
-    std::string body = "{\"name\":\"" + name +
-                       "\",\"folder\":{},\"@microsoft.graph.conflictBehavior\":\"replace\"}";
+    std::string body = "{\"name\":" + JsonUtil::Quote(name) +
+                       ",\"folder\":{},\"@microsoft.graph.conflictBehavior\":\"replace\"}";
     auto resp = http_.Post(url, tok, body);
     if (!resp.ok()) {
         err = "createFolder failed";
@@ -219,8 +221,8 @@ bool SharePointBackend::CopyItem(const std::string& root, const std::string& src
                                  const std::string& tok, std::string& err) {
     std::string url =
         "https://graph.microsoft.com/v1.0/drives/" + root + "/items/" + src_id + "/copy";
-    std::string body =
-        "{\"parentReference\":{\"id\":\"" + dst_parent_id + "\"},\"name\":\"" + dst_name + "\"}";
+    std::string body = "{\"parentReference\":{\"id\":" + JsonUtil::Quote(dst_parent_id) +
+                       "},\"name\":" + JsonUtil::Quote(dst_name) + "}";
     auto resp = http_.Post(url, tok, body);
     if (resp.status != 202) {
         err = "copy failed (" + resp.StatusLine() + ")";
