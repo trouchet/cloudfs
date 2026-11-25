@@ -44,6 +44,7 @@ class VFSBackend : public ICloudBackend {
     explicit VFSBackend(CloudHttpClient& http) : http_(http) {}
 
     std::string Scheme() const override { return "vfs"; }
+    std::string SecretType() const override { return "vfs"; }
     std::string Name() const override { return "VFS Agent"; }
 
     ProviderCapabilities Capabilities() const override {

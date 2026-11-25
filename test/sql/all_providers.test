@@ -80,12 +80,12 @@ Error
 statement error
 SELECT * FROM read_csv('vfs://127.0.0.1:1/data/*.csv');
 ----
-no auth for 'vfs'
+no secret matches
 
 statement error
 SELECT * FROM read_csv('vfs://127.0.0.1:1/data/f.csv');
 ----
-no auth for 'vfs'
+no secret matches
 
 # Transport errors surface too (port 1 refuses connections)
 statement ok
@@ -98,6 +98,68 @@ cannot expand
 
 statement ok
 DROP SECRET v;
+
+# ── Secret lifecycle (#17) ───────────────────────────────────────────────────
+
+# Options are validated when the secret is created
+statement error
+CREATE SECRET bad (TYPE vfs, PROVIDER token, TOKEN '');
+----
+TOKEN required
+
+statement error
+CREATE SECRET bad (TYPE sharepoint, PROVIDER client_credentials, TENANT_ID 't');
+----
+CLIENT_ID required
+
+# The first registered provider is the default
+statement ok
+CREATE SECRET dflt (TYPE sftp, KEY_PATH '/nonexistent/key');
+
+query I
+SELECT provider FROM duckdb_secrets() WHERE name = 'dflt';
+----
+keyfile
+
+statement ok
+DROP SECRET dflt;
+
+# Sensitive options are redacted
+statement ok
+CREATE SECRET red (TYPE sharepoint, PROVIDER client_credentials,
+                   TENANT_ID 't', CLIENT_ID 'c', CLIENT_SECRET 'supersecret');
+
+query I
+SELECT secret_string LIKE '%supersecret%' FROM duckdb_secrets() WHERE name = 'red';
+----
+false
+
+statement ok
+DROP SECRET red;
+
+# SCOPE selects the secret: a path outside every scope has no credentials
+statement ok
+CREATE SECRET scoped (TYPE vfs, PROVIDER token, TOKEN 'tok', SCOPE 'vfs://127.0.0.1:1');
+
+statement error
+SELECT * FROM read_csv('vfs://127.0.0.1:2/data/f.csv');
+----
+no secret matches
+
+# ... while a path inside the scope gets as far as the network
+statement error
+SELECT * FROM read_csv('vfs://127.0.0.1:1/data/f.csv');
+----
+connect
+
+# DROP SECRET revokes access immediately
+statement ok
+DROP SECRET scoped;
+
+statement error
+SELECT * FROM read_csv('vfs://127.0.0.1:1/data/f.csv');
+----
+no secret matches
 
 # Cleanup
 statement ok

@@ -1,121 +1,191 @@
 #include "core/cloud_secret.hpp"
 
+#include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
-#include <memory>
-#include <vector>
+#include <functional>
+#include <unordered_set>
 
 namespace duckdb {
 
-// ─── Global dispatch table ────────────────────────────────────────────────────
-// create_secret_function_t is a raw function pointer (no captures allowed).
-// We store each registration's state in a global table keyed by index,
-// then generate one non-capturing lambda per slot via a template expansion trick.
-// For simplicity: we use a static vector + index-dispatch function.
-//
-// Thread safety: registrations happen at extension load time (single-threaded),
-// invocations happen at CREATE SECRET time (may be concurrent).
-// Reads are safe after initial setup because the vector is never grown after Load().
-//
-// Lifecycle: CloudSecretRegistry::Clear() is called at the start of each
-// LoadInternal() to remove stale CloudFileSystem* pointers from prior loads.
-// This prevents use-after-free when the extension is reloaded or loaded into
-// multiple DuckDB database instances within the same process.
+// Options whose values must never be shown by duckdb_secrets().
+static const char* const kSensitiveKeys[] = {"token",    "client_secret", "app_secret",
+                                             "password", "passphrase",    "key_json"};
 
-struct SecretDispatchEntry {
-    CloudFileSystem* cfs;
-    SecretBuilderFn builder;
+// ─── Per-database state ───────────────────────────────────────────────────────
+// CREATE SECRET functions are plain function pointers, so they cannot capture
+// the registry they belong to.  The registry is published in the database's
+// ObjectCache instead, which keeps the lookup per database: several databases
+// in one process each find their own registry.
+struct CloudfsDatabaseState : public ObjectCacheEntry {
+    explicit CloudfsDatabaseState(CloudSecretRegistry& registry_) : registry(registry_) {}
+
+    static string ObjectType() { return "cloudfs_database_state"; }
+    string GetObjectType() override { return ObjectType(); }
+    // Not evictable: this is a pointer to live state, not a cache entry.
+    optional_idx GetEstimatedCacheMemory() const override { return optional_idx(); }
+
+    CloudSecretRegistry& registry;
 };
 
-static std::vector<SecretDispatchEntry>& GetDispatchTable() {
-    static std::vector<SecretDispatchEntry> table;
-    return table;
+static const char* const kStateKey = "cloudfs_database_state";
+
+static std::string FactoryKey(const std::string& secret_type, const std::string& provider) {
+    return StringUtil::Lower(secret_type) + "/" + StringUtil::Lower(provider);
 }
 
-// We generate up to 32 dispatch slots at compile time.
-// Each slot is a distinct non-capturing function that reads its state from the global table.
-#define MAKE_SLOT(N)                                                                          \
-    static unique_ptr<BaseSecret> SecretSlot_##N(ClientContext& ctx, CreateSecretInput& in) { \
-        auto& e = GetDispatchTable()[N];                                                      \
-        auto result = make_uniq<KeyValueSecret>(in.scope, in.type, in.provider, in.name);     \
-        for (auto it = in.options.begin(); it != in.options.end(); ++it)                      \
-            result->secret_map[it->first] = it->second;                                       \
-        e.builder(ctx, in, *e.cfs);                                                           \
-        return std::move(result);                                                             \
+// ─── CREATE SECRET ────────────────────────────────────────────────────────────
+// One function serves every (type, provider) pair.  It stores the options in a
+// KeyValueSecret and validates them by running the matching auth factory; the
+// auth provider itself is discarded and rebuilt lazily on first use.
+static unique_ptr<BaseSecret> CreateCloudSecret(ClientContext& context, CreateSecretInput& input) {
+    auto state = DatabaseInstance::GetDatabase(context).GetObjectCache().Get<CloudfsDatabaseState>(
+        kStateKey);
+    if (!state)
+        throw InternalException("cloudfs: secret registry is not initialized for this database");
+
+    auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
+    SecretParams params;
+    for (auto& option : input.options) {
+        auto key = StringUtil::Lower(option.first);
+        secret->secret_map[key] = option.second;
+        params.values[key] = option.second.ToString();
+    }
+    for (auto& key : kSensitiveKeys)
+        secret->redact_keys.insert(key);
+
+    state->registry.Build(input.type, input.provider, params);
+    return std::move(secret);
+}
+
+// ─── CloudSecretRegistry ──────────────────────────────────────────────────────
+CloudSecretRegistry::CloudSecretRegistry(DatabaseInstance& db) : db_(db) {
+    db_.GetObjectCache().Put(kStateKey, make_shared_ptr<CloudfsDatabaseState>(*this));
+}
+
+void CloudSecretRegistry::Register(ExtensionLoader& loader, const std::string& secret_type,
+                                   const std::string& provider,
+                                   const std::vector<std::string>& named_params,
+                                   AuthFactoryFn factory) {
+    // First provider registered for a type: declare the type with it as default.
+    bool type_known = false;
+    const std::string type_prefix = StringUtil::Lower(secret_type) + "/";
+    for (auto& entry : factories_) {
+        if (entry.first.compare(0, type_prefix.size(), type_prefix) == 0) {
+            type_known = true;
+            break;
+        }
+    }
+    if (!type_known) {
+        SecretType st;
+        st.name = secret_type;
+        st.deserializer = +[](Deserializer& d, BaseSecret b) -> unique_ptr<BaseSecret> {
+            return KeyValueSecret::Deserialize<KeyValueSecret>(d, std::move(b));
+        };
+        st.default_provider = provider;
+        loader.RegisterSecretType(st);
     }
 
-MAKE_SLOT(0)
-MAKE_SLOT(1)
-MAKE_SLOT(2)
-MAKE_SLOT(3)
-MAKE_SLOT(4)
-MAKE_SLOT(5)
-MAKE_SLOT(6)
-MAKE_SLOT(7)
-MAKE_SLOT(8)
-MAKE_SLOT(9)
-MAKE_SLOT(10)
-MAKE_SLOT(11)
-MAKE_SLOT(12)
-MAKE_SLOT(13)
-MAKE_SLOT(14)
-MAKE_SLOT(15)
+    factories_[FactoryKey(secret_type, provider)] = std::move(factory);
 
-// clang-format off
-static create_secret_function_t kSlots[] = {
-    SecretSlot_0,  SecretSlot_1,  SecretSlot_2,  SecretSlot_3,
-    SecretSlot_4,  SecretSlot_5,  SecretSlot_6,  SecretSlot_7,
-    SecretSlot_8,  SecretSlot_9,  SecretSlot_10, SecretSlot_11,
-    SecretSlot_12, SecretSlot_13, SecretSlot_14, SecretSlot_15,
-};
-// clang-format on
-static constexpr size_t kMaxSlots = sizeof(kSlots) / sizeof(kSlots[0]);
-
-// ─── CloudSecretRegistry::Clear ──────────────────────────────────────────────
-// Called at the start of LoadInternal so that re-loading the extension into a
-// new DuckDB database instance doesn't accumulate stale entries from the
-// previous load (the old CloudFileSystem* pointers are invalid after reload).
-void CloudSecretRegistry::Clear() {
-    GetDispatchTable().clear();
-}
-
-// ─── CloudSecretRegistry::Register ───────────────────────────────────────────
-void CloudSecretRegistry::Register(ExtensionLoader& loader, CloudFileSystem& cfs,
-                                   const std::string& secret_type, const std::string& provider,
-                                   std::vector<std::string> named_params, SecretBuilderFn builder) {
-    auto& table = GetDispatchTable();
-    if (table.size() >= kMaxSlots)
-        throw InternalException("CloudSecretRegistry: exceeded max slot count (" +
-                                std::to_string(kMaxSlots) + ")");
-
-    table.push_back({&cfs, std::move(builder)});
-    size_t slot_idx = table.size() - 1;
-
-    // Register secret type (idempotent)
-    SecretType st;
-    st.name = secret_type;
-    st.deserializer = +[](Deserializer& d, BaseSecret b) -> unique_ptr<BaseSecret> {
-        return KeyValueSecret::Deserialize<KeyValueSecret>(d, std::move(b));
-    };
-    st.default_provider = provider;
-    try {
-        loader.RegisterSecretType(st);
-    } catch (...) {}
-
-    // Register the CREATE SECRET function using a slot function pointer
     CreateSecretFunction f;
     f.secret_type = secret_type;
     f.provider = provider;
-    f.function = kSlots[slot_idx];
-
+    f.function = CreateCloudSecret;
     for (auto& p : named_params)
         f.named_parameters[p] = LogicalType::VARCHAR;
+    loader.RegisterFunction(std::move(f));
+}
 
-    loader.GetDatabaseInstance().GetSecretManager().RegisterSecretFunction(
-        std::move(f), OnCreateConflict::REPLACE_ON_CONFLICT);
+std::shared_ptr<ICloudAuthProvider> CloudSecretRegistry::Build(const std::string& secret_type,
+                                                               const std::string& provider,
+                                                               const SecretParams& params) const {
+    auto it = factories_.find(FactoryKey(secret_type, provider));
+    if (it == factories_.end())
+        throw InvalidInputException("cloudfs: no provider '%s' for secret type '%s'", provider,
+                                    secret_type);
+    auto auth = it->second(params);
+    if (!auth)
+        throw InternalException("cloudfs: auth factory for %s/%s returned nothing", secret_type,
+                                provider);
+    return auth;
+}
+
+void CloudSecretRegistry::ClearAuthCache() {
+    std::lock_guard<std::mutex> lk(mu_);
+    auth_cache_.clear();
+}
+
+static std::string CacheKey(const SecretEntry& entry) {
+    return entry.storage_mode + "/" + entry.secret->GetName();
+}
+
+bool CloudSecretRegistry::ResolveAuth(const std::string& url, const std::string& secret_type,
+                                      std::shared_ptr<ICloudAuthProvider>& out, std::string& err) {
+    try {
+        auto& manager = SecretManager::Get(db_);
+        auto transaction = CatalogTransaction::GetSystemTransaction(db_);
+        auto match = manager.LookupSecret(transaction, url, secret_type);
+        if (!match.HasMatch()) {
+            err = "cloudfs: no secret matches '" + url + "'. Run: CREATE SECRET (TYPE " +
+                  secret_type + ", ...)";
+            return false;
+        }
+
+        auto* kv = dynamic_cast<const KeyValueSecret*>(match.secret_entry->secret.get());
+        if (!kv) {
+            err = "cloudfs: secret '" + match.GetSecret().GetName() + "' has an unexpected format";
+            return false;
+        }
+
+        // The fingerprint covers everything the factory reads, so a secret
+        // replaced under the same name gets a fresh auth provider.
+        SecretParams params;
+        std::string material = kv->GetProvider();
+        for (auto& option : kv->secret_map) { // ordered map: stable iteration
+            auto key = StringUtil::Lower(option.first);
+            auto value = option.second.ToString();
+            material += '\x1f' + key + '\x1e' + value;
+            params.values[key] = std::move(value);
+        }
+        const size_t fingerprint = std::hash<std::string>()(material);
+        const std::string cache_key = CacheKey(*match.secret_entry);
+
+        std::lock_guard<std::mutex> lk(mu_);
+        auto cached = auth_cache_.find(cache_key);
+        if (cached != auth_cache_.end() && cached->second.fingerprint == fingerprint) {
+            out = cached->second.auth;
+            return true;
+        }
+
+        auto auth = Build(kv->GetType(), kv->GetProvider(), params);
+
+        // A cache miss is rare (first use or changed secret), so it is a cheap
+        // moment to forget the tokens of secrets that no longer exist.
+        std::unordered_set<std::string> live;
+        for (auto& entry : manager.AllSecrets(transaction))
+            live.insert(CacheKey(entry));
+        for (auto it = auth_cache_.begin(); it != auth_cache_.end();) {
+            if (live.count(it->first))
+                ++it;
+            else
+                it = auth_cache_.erase(it);
+        }
+
+        auth_cache_[cache_key] = CachedAuth{fingerprint, auth};
+        out = std::move(auth);
+        return true;
+    } catch (std::exception& ex) {
+        ErrorData error(ex);
+        err = "cloudfs: cannot use secret for '" + url + "': " + error.RawMessage();
+        return false;
+    }
 }
 
 } // namespace duckdb

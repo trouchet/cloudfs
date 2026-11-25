@@ -25,6 +25,7 @@ class OneDriveBackend : public ICloudBackend {
     explicit OneDriveBackend(CloudHttpClient& http) : http_(http) {}
 
     std::string Scheme() const override { return "odfs"; }
+    std::string SecretType() const override { return "onedrive"; }
     std::string Name() const override { return "OneDrive"; }
 
     ProviderCapabilities Capabilities() const override {

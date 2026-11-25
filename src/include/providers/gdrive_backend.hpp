@@ -31,6 +31,7 @@ class GDriveBackend : public ICloudBackend {
     explicit GDriveBackend(CloudHttpClient& http) : http_(http) {}
 
     std::string Scheme() const override { return "gdfs"; }
+    std::string SecretType() const override { return "gdrive"; }
     std::string Name() const override { return "Google Drive"; }
 
     ProviderCapabilities Capabilities() const override {

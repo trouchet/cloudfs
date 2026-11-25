@@ -14,11 +14,8 @@ Prerequisites:
     - DuckDB Python package installed  (pip install duckdb)
 
 Design note:
-    The extension's CloudSecretRegistry uses a process-global dispatch table.
-    Each LOAD into a new DuckDB database calls LoadInternal and registers all
-    13 secret providers; loading into a second database would overflow the
-    16-slot limit.  We therefore use ONE connection for the entire suite and
-    reset secret state between sections with CREATE OR REPLACE SECRET.
+    The suite uses ONE connection and resets secret state between sections
+    with CREATE OR REPLACE SECRET.
 """
 
 import ctypes, os, sys, time, shutil, secrets as _secrets, tempfile, subprocess

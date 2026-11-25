@@ -65,23 +65,12 @@ void CloudFileHandle::Close() {
 }
 
 // ─── CloudFileSystem ──────────────────────────────────────────────────────────
-CloudFileSystem::CloudFileSystem() = default;
+CloudFileSystem::CloudFileSystem(DatabaseInstance& db) : secrets_(db) {}
 CloudFileSystem::~CloudFileSystem() = default;
 
 void CloudFileSystem::RegisterBackend(unique_ptr<ICloudBackend> b) {
     std::lock_guard<std::mutex> lk(mu_);
     backends_[b->Scheme()] = std::move(b);
-}
-
-void CloudFileSystem::SetAuth(const std::string& scheme, std::shared_ptr<ICloudAuthProvider> auth) {
-    std::lock_guard<std::mutex> lk(mu_);
-    auth_map_[scheme] = std::move(auth);
-}
-
-std::shared_ptr<ICloudAuthProvider> CloudFileSystem::GetAuth(const std::string& scheme) const {
-    std::lock_guard<std::mutex> lk(mu_);
-    auto it = auth_map_.find(scheme);
-    return it == auth_map_.end() ? nullptr : it->second;
 }
 
 std::vector<std::string> CloudFileSystem::RegisteredSchemes() const {
@@ -116,18 +105,15 @@ ICloudBackend* CloudFileSystem::BackendForNoThrow(const std::string& path) {
     return nullptr;
 }
 
-bool CloudFileSystem::GetToken(const std::string& scheme, std::string& out, std::string& err) {
-    std::shared_ptr<ICloudAuthProvider> auth;
-    {
-        std::lock_guard<std::mutex> lk(mu_);
-        auto it = auth_map_.find(scheme);
-        if (it == auth_map_.end()) {
-            err = "cloudfs: no auth for '" + scheme + "'. Run: CREATE SECRET (TYPE " + scheme +
-                  ", ...)";
-            return false;
-        }
-        auth = it->second;
+bool CloudFileSystem::GetToken(const std::string& url, std::string& out, std::string& err) {
+    auto* backend = BackendForNoThrow(url);
+    if (!backend) {
+        err = "cloudfs: no backend registered for URL: " + url;
+        return false;
     }
+    std::shared_ptr<ICloudAuthProvider> auth;
+    if (!secrets_.ResolveAuth(url, backend->SecretType(), auth, err))
+        return false;
     return auth->GetAccessToken(out, err);
 }
 
@@ -149,7 +135,7 @@ bool CloudFileSystem::ResolvePath(ICloudBackend& backend, const std::string& url
     std::string root_id;
     if (!cache_.GetRootId(backend.Scheme(), raw_root, root_id)) {
         std::string tok;
-        if (!GetToken(backend.Scheme(), tok, err))
+        if (!GetToken(url, tok, err))
             return false;
         if (!backend.ResolveRoot(raw_root, tok, root_id, err))
             return false;
@@ -159,7 +145,7 @@ bool CloudFileSystem::ResolvePath(ICloudBackend& backend, const std::string& url
 
     // 4. Stat the item
     std::string tok;
-    if (!GetToken(backend.Scheme(), tok, err))
+    if (!GetToken(url, tok, err))
         return false;
     if (!backend.Stat(root_id, path, tok, out_item, err))
         return false;
@@ -204,7 +190,7 @@ unique_ptr<FileHandle> CloudFileSystem::OpenFile(const string& path, FileOpenFla
         std::string root_id;
         if (!cache_.GetRootId(backend.Scheme(), raw_root, root_id)) {
             std::string tok;
-            Throw(!GetToken(backend.Scheme(), tok, err) ? "cloudfs: " + err : "");
+            Throw(!GetToken(path, tok, err) ? "cloudfs: " + err : "");
             Throw(!backend.ResolveRoot(raw_root, tok, root_id, err) ? "cloudfs: " + err : "");
             cache_.PutRootId(backend.Scheme(), raw_root, root_id);
         }
@@ -216,7 +202,7 @@ unique_ptr<FileHandle> CloudFileSystem::OpenFile(const string& path, FileOpenFla
             parent_path = "/";
 
         std::string tok;
-        Throw(!GetToken(backend.Scheme(), tok, err) ? "cloudfs: " + err : "");
+        Throw(!GetToken(path, tok, err) ? "cloudfs: " + err : "");
 
         CloudItem parent;
         Throw(!backend.Stat(root_id, parent_path, tok, parent, err)
@@ -251,7 +237,7 @@ unique_ptr<FileHandle> CloudFileSystem::OpenFile(const string& path, FileOpenFla
     auto h = make_uniq<CloudFileHandle>(*this, path, backend, item, root_id, flags);
 
     std::string tok;
-    if (GetToken(backend.Scheme(), tok, err))
+    if (GetToken(path, tok, err))
         EnsureDownloadUrl(backend, root_id, h->item, tok, err);
 
     return std::move(h);
@@ -261,7 +247,7 @@ unique_ptr<FileHandle> CloudFileSystem::OpenFile(const string& path, FileOpenFla
 void CloudFileSystem::Read(FileHandle& handle, void* buf, int64_t nr, idx_t loc) {
     auto& h = dynamic_cast<CloudFileHandle&>(handle);
     std::string err, tok;
-    GetToken(h.backend.Scheme(), tok, err);
+    Throw(!GetToken(h.path, tok, err) ? "cloudfs read: " + err : "");
 
     auto try_read = [&]() -> int64_t {
         if (!h.item.download_url.empty())
@@ -276,7 +262,7 @@ void CloudFileSystem::Read(FileHandle& handle, void* buf, int64_t nr, idx_t loc)
         // Evict stale URL and retry once
         cache_.PutDownloadUrl(h.backend.Scheme(), h.item.id, "");
         h.item.download_url.clear();
-        if (GetToken(h.backend.Scheme(), tok, err))
+        if (GetToken(h.path, tok, err))
             EnsureDownloadUrl(h.backend, h.root_id, h.item, tok, err);
         n = try_read();
         if (n < 0)
@@ -317,7 +303,7 @@ void CloudFileSystem::FlushWrite(CloudFileHandle& h) {
     if (!h.upload_active || h.write_buffer.empty())
         return;
     std::string err, tok;
-    Throw(!GetToken(h.backend.Scheme(), tok, err) ? "cloudfs flush: " + err : "");
+    Throw(!GetToken(h.path, tok, err) ? "cloudfs flush: " + err : "");
 
     auto caps = h.backend.Capabilities();
     int64_t total = h.bytes_written;
@@ -416,12 +402,12 @@ void CloudFileSystem::CreateDirectory(const string& path, optional_ptr<FileOpene
     std::string root_id;
     if (!cache_.GetRootId(b.Scheme(), raw_root, root_id)) {
         std::string tok;
-        Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+        Throw(!GetToken(path, tok, err) ? err : "");
         Throw(!b.ResolveRoot(raw_root, tok, root_id, err) ? err : "");
         cache_.PutRootId(b.Scheme(), raw_root, root_id);
     }
     std::string tok;
-    Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+    Throw(!GetToken(path, tok, err) ? err : "");
 
     auto parent_path = item_path.substr(0, item_path.rfind('/'));
     auto name = item_path.substr(item_path.rfind('/') + 1);
@@ -442,7 +428,7 @@ void CloudFileSystem::RemoveDirectory(const string& path, optional_ptr<FileOpene
     Throw(!ResolvePath(b, path, item, root_id, err) ? err : "");
     Throw(!item.is_folder ? "not a directory: " + path : "");
     std::string tok;
-    Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+    Throw(!GetToken(path, tok, err) ? err : "");
     Throw(!b.DeleteItem(root_id, item.id, tok, err) ? err : "");
     cache_.InvalidatePrefix(b.Scheme(), path);
 }
@@ -453,7 +439,7 @@ void CloudFileSystem::RemoveFile(const string& path, optional_ptr<FileOpener>) {
     std::string root_id, err;
     Throw(!ResolvePath(b, path, item, root_id, err) ? err : "");
     std::string tok;
-    Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+    Throw(!GetToken(path, tok, err) ? err : "");
     Throw(!b.DeleteItem(root_id, item.id, tok, err) ? err : "");
     cache_.InvalidateItem(b.Scheme(), path);
 }
@@ -475,12 +461,12 @@ void CloudFileSystem::MoveFile(const string& src_url, const string& dst_url,
     std::string root_id;
     if (!cache_.GetRootId(b.Scheme(), src_raw, root_id)) {
         std::string tok;
-        Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+        Throw(!GetToken(src_url, tok, err) ? err : "");
         Throw(!b.ResolveRoot(src_raw, tok, root_id, err) ? err : "");
         cache_.PutRootId(b.Scheme(), src_raw, root_id);
     }
     std::string tok;
-    Throw(!GetToken(b.Scheme(), tok, err) ? err : "");
+    Throw(!GetToken(src_url, tok, err) ? err : "");
 
     // Stat the source item
     CloudItem src_item;
@@ -525,7 +511,7 @@ bool CloudFileSystem::ListFiles(const string& dir,
     if (!folder.is_folder)
         return false;
     std::string tok;
-    if (!GetToken(b->Scheme(), tok, err))
+    if (!GetToken(dir, tok, err))
         throw IOException("cloudfs: cannot list '" + dir + "': " + err);
     // Collect first: a failure on a later page must not leave the caller with
     // a partial listing it already acted on.
@@ -614,7 +600,7 @@ vector<OpenFileInfo> CloudFileSystem::Glob(const string& path, FileOpener*) {
     std::string root_id;
     if (!cache_.GetRootId(b->Scheme(), raw_root, root_id)) {
         std::string tok;
-        if (!GetToken(b->Scheme(), tok, err))
+        if (!GetToken(path, tok, err))
             throw IOException(fail + err);
         if (!b->ResolveRoot(raw_root, tok, root_id, err))
             throw IOException(fail + err);
@@ -623,7 +609,7 @@ vector<OpenFileInfo> CloudFileSystem::Glob(const string& path, FileOpener*) {
 
     // Get access token
     std::string tok;
-    if (!GetToken(b->Scheme(), tok, err))
+    if (!GetToken(path, tok, err))
         throw IOException(fail + err);
 
     // Split item_path into static prefix and glob portion

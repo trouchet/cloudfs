@@ -63,6 +63,10 @@ class ICloudBackend {
     // Protocol scheme this backend claims (e.g. "spfs", "gdfs", "dbxfs").
     virtual std::string Scheme() const = 0;
 
+    // DuckDB secret type holding this backend's credentials
+    // (CREATE SECRET (TYPE <this>, ...)), e.g. "sharepoint" for spfs://.
+    virtual std::string SecretType() const = 0;
+
     // Human-readable provider name for error messages.
     virtual std::string Name() const = 0;
 

@@ -1,6 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "cloudfs_extension.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 
@@ -17,248 +18,152 @@
 
 namespace duckdb {
 
-// NOTE: This global pointer is ONLY valid during LoadInternal and is used ONLY
-// to pass the CloudFileSystem instance to CloudSecretRegistry::Register.
-// The SecretDispatchEntry stores this pointer for CREATE SECRET callbacks.
-// CloudSecretRegistry::Clear() at the start of LoadInternal ensures the dispatch
-// table is emptied before each load, preventing stale pointers from prior loads.
+// Reject a missing required option with a uniform message.
+static std::string Require(const SecretParams& p, const char* key, const char* what) {
+    auto v = p.Get(key);
+    if (v.empty())
+        throw InvalidInputException("%s: %s required", what, StringUtil::Upper(key));
+    return v;
+}
+
+static const char* const kAzureCliClientId = "04b07795-8542-4c45-a7a4-26c5a3e61e39";
+static const char* const kGraphDefaultScope = "https://graph.microsoft.com/.default";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Secret types and providers
 //
-// Ideally, DuckDB extension API would provide per-database-instance storage or
-// a teardown hook to remove this global state entirely. Until then, this design
-// ensures correctness by clearing stale entries at each reload.
-static CloudFileSystem* g_cfs = nullptr;
+// Each entry maps CREATE SECRET (TYPE t, PROVIDER p, ...) to a factory that
+// turns the secret's options into an auth provider.  Factories run when the
+// secret is created (to validate it) and again, lazily, the first time a path
+// matching the secret is accessed; see CloudSecretRegistry.
+// The first provider registered for a type is its default.
+// ─────────────────────────────────────────────────────────────────────────────
+static void RegisterSecretProviders(ExtensionLoader& loader, CloudSecretRegistry& secrets) {
+    using AuthPtr = std::shared_ptr<ICloudAuthProvider>;
+
+    // ── SharePoint ────────────────────────────────────────────────────────────
+    secrets.Register(loader, "sharepoint", "oauth", {"tenant_id", "client_id", "scope"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         return std::make_shared<SharePointDeviceCodeAuth>(
+                             p.GetOr("tenant_id", "common"),
+                             p.GetOr("client_id", kAzureCliClientId),
+                             p.GetOr("scope", kGraphDefaultScope));
+                     });
+    secrets.Register(loader, "sharepoint", "token", {"tenant_id", "client_id", "scope", "token"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         return std::make_shared<StaticTokenAuth>(
+                             "sharepoint", Require(p, "token", "sharepoint token"));
+                     });
+    secrets.Register(loader, "sharepoint", "client_credentials",
+                     {"tenant_id", "client_id", "client_secret", "scope"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         const char* what = "sharepoint client_credentials";
+                         auto tenant = Require(p, "tenant_id", what);
+                         auto client = Require(p, "client_id", what);
+                         auto secret = Require(p, "client_secret", what);
+                         return std::make_shared<SharePointClientCredentialsAuth>(
+                             tenant, client, secret, p.GetOr("scope", kGraphDefaultScope));
+                     });
+
+    // ── OneDrive ──────────────────────────────────────────────────────────────
+    secrets.Register(loader, "onedrive", "oauth", {"tenant_id", "client_id"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         return std::make_shared<OneDriveAuth>(
+                             p.GetOr("tenant_id", "common"),
+                             p.GetOr("client_id", kAzureCliClientId));
+                     });
+    secrets.Register(loader, "onedrive", "token", {"token"}, [](const SecretParams& p) -> AuthPtr {
+        return std::make_shared<StaticTokenAuth>("onedrive", Require(p, "token", "onedrive token"));
+    });
+    secrets.Register(loader, "onedrive", "client_credentials",
+                     {"tenant_id", "client_id", "client_secret", "scope"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         const char* what = "onedrive client_credentials";
+                         auto tenant = Require(p, "tenant_id", what);
+                         auto client = Require(p, "client_id", what);
+                         auto secret = Require(p, "client_secret", what);
+                         return std::make_shared<OneDriveClientCredentialsAuth>(
+                             tenant, client, secret, p.GetOr("scope", kGraphDefaultScope));
+                     });
+
+    // ── Google Drive ──────────────────────────────────────────────────────────
+    secrets.Register(loader, "gdrive", "oauth", {"client_id", "client_secret"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         return std::make_shared<GDriveOAuthProvider>(p.Get("client_id"),
+                                                                      p.Get("client_secret"));
+                     });
+    secrets.Register(loader, "gdrive", "service_account", {"key_json"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         return std::make_shared<GDriveServiceAccountAuth>(
+                             Require(p, "key_json", "gdrive service_account"));
+                     });
+    secrets.Register(loader, "gdrive", "token", {"token"}, [](const SecretParams& p) -> AuthPtr {
+        return std::make_shared<StaticTokenAuth>("gdrive", Require(p, "token", "gdrive token"));
+    });
+
+    // ── Dropbox ───────────────────────────────────────────────────────────────
+    secrets.Register(loader, "dropbox", "oauth", {"app_key", "app_secret"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         return std::make_shared<DropboxOAuthProvider>(p.Get("app_key"),
+                                                                       p.Get("app_secret"));
+                     });
+    secrets.Register(loader, "dropbox", "token", {"token"}, [](const SecretParams& p) -> AuthPtr {
+        return std::make_shared<StaticTokenAuth>("dropbox", Require(p, "token", "dropbox token"));
+    });
+
+    // ── SFTP ──────────────────────────────────────────────────────────────────
+    // The SFTP backend receives its credentials through the "token" string:
+    //   "keyfile:/home/user/.ssh/id_rsa[:passphrase]", "agent:", "password:secret"
+    secrets.Register(loader, "sftp", "keyfile", {"host", "user", "key_path", "passphrase"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         std::string tok = "keyfile:" + Require(p, "key_path", "sftp keyfile");
+                         if (!p.Get("passphrase").empty())
+                             tok += ":" + p.Get("passphrase");
+                         return std::make_shared<SFTPAuth>(tok);
+                     });
+    secrets.Register(loader, "sftp", "agent", {"host", "user"}, [](const SecretParams&) -> AuthPtr {
+        return std::make_shared<SFTPAuth>("agent:");
+    });
+    secrets.Register(loader, "sftp", "password", {"host", "user", "password"},
+                     [](const SecretParams& p) -> AuthPtr {
+                         return std::make_shared<SFTPAuth>("password:" +
+                                                           Require(p, "password", "sftp password"));
+                     });
+
+    // ── VFS (cloudfs-agent) ───────────────────────────────────────────────────
+    secrets.Register(loader, "vfs", "token", {"token"}, [](const SecretParams& p) -> AuthPtr {
+        return std::make_shared<VFSAuth>(Require(p, "token", "vfs"));
+    });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LoadInternal
-// Wires together: CloudFileSystem + 4 backends + 8 secret providers
+// Wires together the CloudFileSystem, its backends, the secret providers and
+// the SQL functions.  Everything is owned by the database being loaded into:
+// there is no process-global state, so several databases can load the
+// extension side by side.
 // ─────────────────────────────────────────────────────────────────────────────
 static void LoadInternal(ExtensionLoader& loader) {
     auto& db = loader.GetDatabaseInstance();
 
-    // Clear stale secret slots from any previous load in this process.
-    // Without this, loading the extension into a second DuckDB database would
-    // overflow the 16-slot dispatch table.
-    CloudSecretRegistry::Clear();
-
-    // ── 1. Create the single CloudFileSystem ─────────────────────────────────
-    auto cfs_uptr = make_uniq<CloudFileSystem>();
-    g_cfs = cfs_uptr.get();
+    // ── 1. Create the CloudFileSystem ─────────────────────────────────────────
+    // The database's VirtualFileSystem owns it; the raw pointer captured by the
+    // functions below stays valid for as long as those functions exist.
+    auto cfs_uptr = make_uniq<CloudFileSystem>(db);
+    CloudFileSystem* cfs = cfs_uptr.get();
     db.GetFileSystem().RegisterSubSystem(std::move(cfs_uptr));
 
     // ── 2. Register all built-in backends ────────────────────────────────────
     // Each backend shares the CloudFileSystem's internal HTTP client.
-    // Cast is safe: we own the raw ptr and it outlives all backends.
-    g_cfs->RegisterBackend(make_uniq<SharePointBackend>(g_cfs->GetHttpClient()));
-    g_cfs->RegisterBackend(make_uniq<OneDriveBackend>(g_cfs->GetHttpClient()));
-    g_cfs->RegisterBackend(make_uniq<GDriveBackend>(g_cfs->GetHttpClient()));
-    g_cfs->RegisterBackend(make_uniq<DropboxBackend>(g_cfs->GetHttpClient()));
-    g_cfs->RegisterBackend(make_uniq<SFTPBackend>());
-    g_cfs->RegisterBackend(make_uniq<VFSBackend>(g_cfs->GetHttpClient()));
+    cfs->RegisterBackend(make_uniq<SharePointBackend>(cfs->GetHttpClient()));
+    cfs->RegisterBackend(make_uniq<OneDriveBackend>(cfs->GetHttpClient()));
+    cfs->RegisterBackend(make_uniq<GDriveBackend>(cfs->GetHttpClient()));
+    cfs->RegisterBackend(make_uniq<DropboxBackend>(cfs->GetHttpClient()));
+    cfs->RegisterBackend(make_uniq<SFTPBackend>());
+    cfs->RegisterBackend(make_uniq<VFSBackend>(cfs->GetHttpClient()));
 
     // ── 3. Register secret types for each provider ────────────────────────────
-    // sharepoint: oauth, token, client_credentials (3)
-    // onedrive:   oauth, token, client_credentials (3)
-    // gdrive:     oauth, service_account, token    (3)
-    // dropbox:    oauth, token                     (2)
-    // sftp:       keyfile, agent, password         (3)
-    // vfs:        token                            (1)
-    // Total: 15 slots (max 16)
-
-    // SharePoint — oauth (Device Code) + token (static)
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "sharepoint", "oauth", {"tenant_id", "client_id", "scope"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto get = [&](const std::string& k) {
-                auto it = in.options.find(k);
-                return it == in.options.end() ? "" : it->second.ToString();
-            };
-            auto auth = std::make_shared<SharePointDeviceCodeAuth>(
-                get("tenant_id").empty() ? "common" : get("tenant_id"),
-                get("client_id").empty() ? "04b07795-8542-4c45-a7a4-26c5a3e61e39"
-                                         : get("client_id"),
-                get("scope").empty() ? "https://graph.microsoft.com/.default" : get("scope"));
-            cfs.SetAuth("spfs", auth);
-        });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "sharepoint", "token", {"tenant_id", "client_id", "scope", "token"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto tok = in.options.count("token") ? in.options.at("token").ToString() : "";
-            if (tok.empty())
-                throw InvalidInputException("sharepoint token: TOKEN required");
-            cfs.SetAuth("spfs", std::make_shared<StaticTokenAuth>("sharepoint", tok));
-        });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "sharepoint", "client_credentials",
-        {"tenant_id", "client_id", "client_secret", "scope"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto get = [&](const std::string& k) {
-                auto it = in.options.find(k);
-                return it == in.options.end() ? "" : it->second.ToString();
-            };
-            auto tid = get("tenant_id");
-            auto cid = get("client_id");
-            auto csec = get("client_secret");
-            if (tid.empty())
-                throw InvalidInputException("sharepoint client_credentials: TENANT_ID required");
-            if (cid.empty())
-                throw InvalidInputException("sharepoint client_credentials: CLIENT_ID required");
-            if (csec.empty())
-                throw InvalidInputException(
-                    "sharepoint client_credentials: CLIENT_SECRET required");
-            auto scope = get("scope");
-            if (scope.empty())
-                scope = "https://graph.microsoft.com/.default";
-            cfs.SetAuth("spfs",
-                        std::make_shared<SharePointClientCredentialsAuth>(tid, cid, csec, scope));
-        });
-
-    // OneDrive — oauth + token
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "onedrive", "oauth", {"tenant_id", "client_id"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto get = [&](const std::string& k) {
-                auto it = in.options.find(k);
-                return it == in.options.end() ? "" : it->second.ToString();
-            };
-            auto auth = std::make_shared<OneDriveAuth>(
-                get("tenant_id").empty() ? "common" : get("tenant_id"),
-                get("client_id").empty() ? "04b07795-8542-4c45-a7a4-26c5a3e61e39"
-                                         : get("client_id"));
-            cfs.SetAuth("odfs", auth);
-        });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "onedrive", "token", {"token"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto tok = in.options.count("token") ? in.options.at("token").ToString() : "";
-            if (tok.empty())
-                throw InvalidInputException("onedrive token: TOKEN required");
-            cfs.SetAuth("odfs", std::make_shared<StaticTokenAuth>("onedrive", tok));
-        });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "onedrive", "client_credentials",
-        {"tenant_id", "client_id", "client_secret", "scope"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto get = [&](const std::string& k) {
-                auto it = in.options.find(k);
-                return it == in.options.end() ? "" : it->second.ToString();
-            };
-            auto tid = get("tenant_id");
-            auto cid = get("client_id");
-            auto csec = get("client_secret");
-            if (tid.empty())
-                throw InvalidInputException("onedrive client_credentials: TENANT_ID required");
-            if (cid.empty())
-                throw InvalidInputException("onedrive client_credentials: CLIENT_ID required");
-            if (csec.empty())
-                throw InvalidInputException("onedrive client_credentials: CLIENT_SECRET required");
-            auto scope = get("scope");
-            if (scope.empty())
-                scope = "https://graph.microsoft.com/.default";
-            cfs.SetAuth("odfs",
-                        std::make_shared<OneDriveClientCredentialsAuth>(tid, cid, csec, scope));
-        });
-
-    // Google Drive — oauth (user PKCE) + service_account (JWT)
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "gdrive", "oauth", {"client_id", "client_secret"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto get = [&](const std::string& k) {
-                auto it = in.options.find(k);
-                return it == in.options.end() ? "" : it->second.ToString();
-            };
-            cfs.SetAuth("gdfs", std::make_shared<GDriveOAuthProvider>(get("client_id"),
-                                                                      get("client_secret")));
-        });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "gdrive", "service_account", {"key_json"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto key = in.options.count("key_json") ? in.options.at("key_json").ToString() : "";
-            if (key.empty())
-                throw InvalidInputException("gdrive service_account: KEY_JSON required");
-            cfs.SetAuth("gdfs", std::make_shared<GDriveServiceAccountAuth>(key));
-        });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "gdrive", "token", {"token"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto tok = in.options.count("token") ? in.options.at("token").ToString() : "";
-            if (tok.empty())
-                throw InvalidInputException("gdrive token: TOKEN required");
-            cfs.SetAuth("gdfs", std::make_shared<StaticTokenAuth>("gdrive", tok));
-        });
-
-    // Dropbox — oauth + token
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "dropbox", "oauth", {"app_key", "app_secret"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto get = [&](const std::string& k) {
-                auto it = in.options.find(k);
-                return it == in.options.end() ? "" : it->second.ToString();
-            };
-            cfs.SetAuth("dbxfs",
-                        std::make_shared<DropboxOAuthProvider>(get("app_key"), get("app_secret")));
-        });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "dropbox", "token", {"token"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto tok = in.options.count("token") ? in.options.at("token").ToString() : "";
-            if (tok.empty())
-                throw InvalidInputException("dropbox token: TOKEN required");
-            cfs.SetAuth("dbxfs", std::make_shared<StaticTokenAuth>("dropbox", tok));
-        });
-
-    // ── SFTP ──────────────────────────────────────────────────────────────────
-    // sftp://user@host/path — token encodes auth method:
-    //   "keyfile:/home/user/.ssh/id_rsa[:passphrase]"
-    //   "agent:"
-    //   "password:mysecret"
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "sftp", "keyfile", {"host", "user", "key_path", "passphrase"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto get = [&](const std::string& k) {
-                auto it = in.options.find(k);
-                return it == in.options.end() ? "" : it->second.ToString();
-            };
-            std::string tok = "keyfile:" + get("key_path");
-            if (!get("passphrase").empty())
-                tok += ":" + get("passphrase");
-            if (tok == "keyfile:")
-                throw InvalidInputException("sftp keyfile: KEY_PATH required");
-            cfs.SetAuth("sftp", std::make_shared<SFTPAuth>(tok));
-        });
-
-    CloudSecretRegistry::Register(loader, *g_cfs, "sftp", "agent", {"host", "user"},
-                                  [](ClientContext&, CreateSecretInput&, CloudFileSystem& cfs) {
-                                      cfs.SetAuth("sftp", std::make_shared<SFTPAuth>("agent:"));
-                                  });
-
-    CloudSecretRegistry::Register(
-        loader, *g_cfs, "sftp", "password", {"host", "user", "password"},
-        [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-            auto it = in.options.find("password");
-            std::string pw = it == in.options.end() ? "" : it->second.ToString();
-            if (pw.empty())
-                throw InvalidInputException("sftp password: PASSWORD required");
-            cfs.SetAuth("sftp", std::make_shared<SFTPAuth>("password:" + pw));
-        });
-
-    // ── VFS (cloudfs-agent) ───────────────────────────────────────────────────
-    CloudSecretRegistry::Register(loader, *g_cfs, "vfs", "token", {"token"},
-                                  [](ClientContext&, CreateSecretInput& in, CloudFileSystem& cfs) {
-                                      auto it = in.options.find("token");
-                                      std::string tok =
-                                          it == in.options.end() ? "" : it->second.ToString();
-                                      if (tok.empty())
-                                          throw InvalidInputException("vfs: TOKEN required");
-                                      cfs.SetAuth("vfs", std::make_shared<VFSAuth>(tok));
-                                      cfs.SetAuth("vfs+tls", std::make_shared<VFSAuth>(tok));
-                                  });
+    RegisterSecretProviders(loader, cfs->GetSecrets());
 
     // ── 4. Utility scalar functions ───────────────────────────────────────────
 
@@ -270,45 +175,38 @@ static void LoadInternal(ExtensionLoader& loader) {
     // cloudfs_providers()
     {
         ScalarFunctionSet s("cloudfs_providers");
-        s.AddFunction(
-            ScalarFunction({}, LogicalType::VARCHAR, [](DataChunk&, ExpressionState&, Vector& r) {
-                if (!g_cfs) {
-                    r.SetValue(0, Value(""));
-                    return;
-                }
-                std::string out;
-                for (auto& sc : g_cfs->RegisteredSchemes())
-                    out += (out.empty() ? "" : ", ") + sc;
-                r.SetValue(0, Value(out));
-            }));
+        s.AddFunction(ScalarFunction({}, LogicalType::VARCHAR,
+                                     [cfs](DataChunk&, ExpressionState&, Vector& r) {
+                                         std::string out;
+                                         for (auto& sc : cfs->RegisteredSchemes())
+                                             out += (out.empty() ? "" : ", ") + sc;
+                                         r.SetValue(0, Value(out));
+                                     }));
         loader.RegisterFunction(s);
     }
 
     // cloudfs_clear_cache() and cloudfs_clear_cache(scheme)
     {
         ScalarFunctionSet s("cloudfs_clear_cache");
-        s.AddFunction(
-            ScalarFunction({}, LogicalType::VARCHAR, [](DataChunk&, ExpressionState&, Vector& r) {
-                if (g_cfs)
-                    g_cfs->GetCache().ClearAll();
-                r.SetValue(0, Value("OK: all caches cleared"));
-            }));
+        s.AddFunction(ScalarFunction({}, LogicalType::VARCHAR,
+                                     [cfs](DataChunk&, ExpressionState&, Vector& r) {
+                                         cfs->GetCache().ClearAll();
+                                         r.SetValue(0, Value("OK: all caches cleared"));
+                                     }));
         s.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,
-                                     [](DataChunk& args, ExpressionState&, Vector& r) {
+                                     [cfs](DataChunk& args, ExpressionState&, Vector& r) {
                                          auto sc = args.data[0].GetValue(0).ToString();
-                                         if (g_cfs) {
-                                             if (sc == "*" || sc == "all")
-                                                 g_cfs->GetCache().ClearAll();
-                                             else
-                                                 g_cfs->GetCache().ClearScheme(sc);
-                                         }
+                                         if (sc == "*" || sc == "all")
+                                             cfs->GetCache().ClearAll();
+                                         else
+                                             cfs->GetCache().ClearScheme(sc);
                                          r.SetValue(0, Value("OK: cache cleared for '" + sc + "'"));
                                      }));
         loader.RegisterFunction(s);
     }
 
     // Table functions: ls(), stat(), du()
-    RegisterCloudTableFunctions(loader, g_cfs);
+    RegisterCloudTableFunctions(loader, cfs);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -23,6 +23,8 @@ public:
 
     // ── Identity ──────────────────────────────────────────────────────────
     std::string Scheme() const override { return "myfs"; }
+    // Secret type holding the credentials: CREATE SECRET (TYPE mystorage, ...)
+    std::string SecretType() const override { return "mystorage"; }
     std::string Name()   const override { return "MyStorage"; }
 
     ProviderCapabilities Capabilities() const override {
@@ -126,17 +128,22 @@ private:
 ```cpp
 // src/extension/cloudfs_extension.cpp  — add inside LoadInternal():
 
-g_cfs->RegisterBackend(make_uniq<MyStorageBackend>(g_cfs->GetHttpClient()));
+cfs->RegisterBackend(make_uniq<MyStorageBackend>(cfs->GetHttpClient()));
 
-CloudSecretRegistry::Register(loader, *g_cfs, "mystorage", "apikey",
-    {"api_key"},
-    [](ClientContext &, CreateSecretInput &in, CloudFileSystem &cfs) {
-        auto key = in.options.count("api_key")
-                   ? in.options.at("api_key").ToString() : "";
-        if (key.empty()) throw InvalidInputException("mystorage: API_KEY required");
-        cfs.SetAuth("myfs", make_shared<MyStorageApiKeyAuth>(key));
+// ... and inside RegisterSecretProviders():
+secrets.Register(loader, "mystorage", "apikey", {"api_key"},
+    [](const SecretParams &p) -> std::shared_ptr<ICloudAuthProvider> {
+        return std::make_shared<MyStorageApiKeyAuth>(
+            Require(p, "api_key", "mystorage"));
     });
 ```
+
+The factory turns a secret's options into an auth provider. It must validate its
+input and must not do any I/O: it runs once when the secret is created (to
+reject bad options early) and again, lazily, the first time a path matching the
+secret is accessed. Credentials are looked up through DuckDB's secret manager on
+every access, so persistent secrets, `DROP SECRET` and `SCOPE` work without any
+provider-specific code.
 
 ## Step 5 — Use it immediately
 

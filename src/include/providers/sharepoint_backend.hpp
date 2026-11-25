@@ -21,6 +21,7 @@ class SharePointBackend : public ICloudBackend {
     explicit SharePointBackend(CloudHttpClient& http) : http_(http) {}
 
     std::string Scheme() const override { return "spfs"; }
+    std::string SecretType() const override { return "sharepoint"; }
     std::string Name() const override { return "SharePoint"; }
 
     ProviderCapabilities Capabilities() const override {

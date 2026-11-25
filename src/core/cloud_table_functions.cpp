@@ -205,10 +205,10 @@ static unique_ptr<FunctionData> LsBind(ClientContext& ctx, TableFunctionBindInpu
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id, err))
+    if (!cfs->GetRootIdPublic(b, url, raw_root, tok, root_id, err))
         throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
-        cfs->GetTokenPublic(b->Scheme(), tok, err);
+        cfs->GetTokenPublic(url, tok, err);
 
     // Stat the target to determine if it's a file or folder
     CloudItem target;
@@ -339,10 +339,10 @@ static unique_ptr<FunctionData> StatBind(ClientContext&, TableFunctionBindInput&
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id, err))
+    if (!cfs->GetRootIdPublic(b, url, raw_root, tok, root_id, err))
         throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
-        cfs->GetTokenPublic(b->Scheme(), tok, err);
+        cfs->GetTokenPublic(url, tok, err);
 
     if (b->Stat(root_id, item_path, tok, data->item, err)) {
         data->item_url = url;
@@ -522,10 +522,10 @@ static unique_ptr<FunctionData> DuBind(ClientContext&, TableFunctionBindInput& i
     std::string raw_root, item_path, err, root_id, tok;
     if (!b->ParseUrl(url, raw_root, item_path, err))
         throw InvalidInputException("Failed to parse URL '%s': %s", url, err);
-    if (!cfs->GetRootIdPublic(b, raw_root, tok, root_id, err))
+    if (!cfs->GetRootIdPublic(b, url, raw_root, tok, root_id, err))
         throw InvalidInputException("Failed to resolve root ID for URL '%s': %s", url, err);
     if (tok.empty())
-        cfs->GetTokenPublic(b->Scheme(), tok, err);
+        cfs->GetTokenPublic(url, tok, err);
 
     CloudItem folder;
     if (!b->Stat(root_id, item_path, tok, folder, err))

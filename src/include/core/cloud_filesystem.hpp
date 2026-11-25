@@ -6,6 +6,7 @@
 #include "cloud_backend.hpp"
 #include "cloud_cache.hpp"
 #include "cloud_http.hpp"
+#include "cloud_secret.hpp"
 
 #include <memory>
 #include <mutex>
@@ -40,7 +41,7 @@ class CloudFileHandle;
 // ─────────────────────────────────────────────────────────────────────────────
 class CloudFileSystem : public FileSystem {
   public:
-    CloudFileSystem();
+    explicit CloudFileSystem(DatabaseInstance& db);
     ~CloudFileSystem() override;
 
     // ── Backend registry ──────────────────────────────────────────────────────
@@ -48,11 +49,8 @@ class CloudFileSystem : public FileSystem {
     // Register a new provider. Thread-safe; can be called after Load().
     void RegisterBackend(unique_ptr<ICloudBackend> backend);
 
-    // Attach an auth provider to a scheme (called from CREATE SECRET handler).
-    void SetAuth(const std::string& scheme, std::shared_ptr<ICloudAuthProvider> auth);
-
-    // Retrieve auth for a scheme (for diagnostics / secret serialization).
-    std::shared_ptr<ICloudAuthProvider> GetAuth(const std::string& scheme) const;
+    // Secret types / providers and the auth providers built from secrets.
+    CloudSecretRegistry& GetSecrets() { return secrets_; }
 
     // List all registered scheme names.
     std::vector<std::string> RegisteredSchemes() const;
@@ -64,22 +62,21 @@ class CloudFileSystem : public FileSystem {
     // ── Public helpers for table functions ──────────────────────────────
     // Find backend for a URL without throwing
     ICloudBackend* BackendForPublic(const std::string& url) { return BackendForNoThrow(url); }
-    // Resolve root_id for a (backend, raw_root) pair, caching the result
-    bool GetRootIdPublic(ICloudBackend* b, const std::string& raw_root, std::string& out_token,
-                         std::string& out_root_id, std::string& out_err) {
-        if (cache_.GetRootId(b->Scheme(), raw_root, out_root_id)) {
-            GetTokenPublic(b->Scheme(), out_token, out_err);
-            return true;
-        }
-        if (!GetToken(b->Scheme(), out_token, out_err))
+    // Resolve root_id for a URL's (backend, raw_root) pair, caching the result.
+    // Also returns the access token of the secret matching `url`.
+    bool GetRootIdPublic(ICloudBackend* b, const std::string& url, const std::string& raw_root,
+                         std::string& out_token, std::string& out_root_id, std::string& out_err) {
+        if (!GetToken(url, out_token, out_err))
             return false;
+        if (cache_.GetRootId(b->Scheme(), raw_root, out_root_id))
+            return true;
         if (!b->ResolveRoot(raw_root, out_token, out_root_id, out_err))
             return false;
         cache_.PutRootId(b->Scheme(), raw_root, out_root_id);
         return true;
     }
-    bool GetTokenPublic(const std::string& scheme, std::string& out_token, std::string& err) {
-        return GetToken(scheme, out_token, err);
+    bool GetTokenPublic(const std::string& url, std::string& out_token, std::string& err) {
+        return GetToken(url, out_token, err);
     }
 
     // ── DuckDB FileSystem interface ───────────────────────────────────────────
@@ -124,8 +121,8 @@ class CloudFileSystem : public FileSystem {
     ICloudBackend& BackendFor(const std::string& path);
     ICloudBackend* BackendForNoThrow(const std::string& path);
 
-    // Get access token for the scheme in a URL
-    bool GetToken(const std::string& scheme, std::string& out_token, std::string& err);
+    // Get an access token for a URL, using the secret whose scope matches it
+    bool GetToken(const std::string& url, std::string& out_token, std::string& err);
 
     // Resolve path → CloudItem (with cache)
     bool ResolvePath(ICloudBackend& backend, const std::string& url, CloudItem& out_item,
@@ -145,7 +142,7 @@ class CloudFileSystem : public FileSystem {
                        vector<OpenFileInfo>& results, const std::string& token);
 
     std::unordered_map<std::string, unique_ptr<ICloudBackend>> backends_;
-    std::unordered_map<std::string, std::shared_ptr<ICloudAuthProvider>> auth_map_;
+    CloudSecretRegistry secrets_;
     CloudCache cache_;
     CloudHttpClient http_; // shared HTTP client (all backends may use it)
     mutable std::mutex mu_;
