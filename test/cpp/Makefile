@@ -6,7 +6,7 @@ OUT := $(ROOT)/build/unit
 
 BUILD := $(ROOT)/build/release
 
-.PHONY: test upload clean
+.PHONY: test upload oauth clean
 test: $(OUT)/test_http_util
 	$(OUT)/test_http_util
 
@@ -20,15 +20,21 @@ $(OUT)/test_http_util: test_http_util.cpp $(ROOT)/src/core/cloud_http.cpp $(ROOT
 		-I$(ROOT)/duckdb/src/include $< \
 		$(ROOT)/src/core/cloud_http.cpp $(YYJSON)/yyjson.cpp -lcurl -o $@
 
-# Needs a finished release build (links the static extension and libduckdb).
+# The tests below need a finished release build: they link the static
+# extension and libduckdb.
+LINK_EXT := $(BUILD)/extension/cloudfs/libcloudfs_extension.a -L$(BUILD)/src -lduckdb \
+	-lcurl -lssh2 -lssl -lcrypto -lz -Wl,-rpath,$(abspath $(BUILD)/src)
+EXT_INCLUDES := -I$(ROOT)/duckdb/src/include -I$(ROOT)/src/include
+
 upload: $(OUT)/test_upload
 	$(OUT)/test_upload
 
-$(OUT)/test_upload: test_upload.cpp $(BUILD)/extension/cloudfs/libcloudfs_extension.a
+oauth: $(OUT)/test_oauth_persistence
+	$(OUT)/test_oauth_persistence
+
+$(OUT)/test_%: test_%.cpp $(BUILD)/extension/cloudfs/libcloudfs_extension.a
 	@mkdir -p $(OUT)
-	$(CXX) -std=c++17 -I$(ROOT)/duckdb/src/include -I$(ROOT)/src/include $< \
-		$(BUILD)/extension/cloudfs/libcloudfs_extension.a -L$(BUILD)/src -lduckdb \
-		-lcurl -lssh2 -lssl -lcrypto -lz -Wl,-rpath,$(abspath $(BUILD)/src) -o $@
+	$(CXX) -std=c++17 $(EXT_INCLUDES) $< $(LINK_EXT) -o $@
 
 clean:
 	rm -rf $(OUT)

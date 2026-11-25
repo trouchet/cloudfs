@@ -129,10 +129,7 @@ bool CloudFileSystem::GetToken(const std::string& url, std::string& out, std::st
         err = "cloudfs: no backend registered for URL: " + url;
         return false;
     }
-    std::shared_ptr<ICloudAuthProvider> auth;
-    if (!secrets_.ResolveAuth(url, backend->SecretType(), auth, err))
-        return false;
-    return auth->GetAccessToken(out, err);
+    return secrets_.GetAccessToken(url, backend->SecretType(), out, err);
 }
 
 // ─── ResolvePath ──────────────────────────────────────────────────────────────

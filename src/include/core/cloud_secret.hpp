@@ -77,6 +77,13 @@ class CloudSecretRegistry {
     bool ResolveAuth(const std::string& url, const std::string& secret_type,
                      std::shared_ptr<ICloudAuthProvider>& out, std::string& err);
 
+    // ResolveAuth() followed by GetAccessToken() on the result.  If the token
+    // exchange produced a new OAuth refresh token and the secret is PERSISTENT,
+    // the refresh token is written back into the stored secret, so the next
+    // process can refresh silently instead of asking the user to log in again.
+    bool GetAccessToken(const std::string& url, const std::string& secret_type,
+                        std::string& out_token, std::string& err);
+
     // Run the factory for (secret_type, provider).  Throws on invalid options.
     std::shared_ptr<ICloudAuthProvider> Build(const std::string& secret_type,
                                               const std::string& provider,
@@ -89,7 +96,21 @@ class CloudSecretRegistry {
     struct CachedAuth {
         size_t fingerprint;
         std::shared_ptr<ICloudAuthProvider> auth;
+        // Refresh token currently recorded in the stored secret ("" = none).
+        std::string stored_refresh_token;
     };
+
+    // The secret an auth provider was built from.
+    struct SecretRef {
+        std::string cache_key;
+        std::string name;
+        std::string storage;
+    };
+
+    bool Resolve(const std::string& url, const std::string& secret_type,
+                 std::shared_ptr<ICloudAuthProvider>& out, SecretRef& ref, std::string& err);
+    // Best effort: never throws, never fails the caller.
+    void PersistRefreshToken(const SecretRef& ref, ICloudAuthProvider& auth) noexcept;
 
     DatabaseInstance& db_;
     // "type/provider" → factory.  Written only during extension load.

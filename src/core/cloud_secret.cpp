@@ -15,8 +15,13 @@
 namespace duckdb {
 
 // Options whose values must never be shown by duckdb_secrets().
-static const char* const kSensitiveKeys[] = {"token",    "client_secret", "app_secret",
-                                             "password", "passphrase",    "key_json"};
+static const char* const kSensitiveKeys[] = {
+    "token", "client_secret", "app_secret", "password", "passphrase", "key_json", "refresh_token"};
+
+// Key under which an OAuth refresh token is kept inside a persistent secret.
+// It is state written by the extension, not an option the user provides, so it
+// is left out of the fingerprint that decides when to rebuild an auth provider.
+static const char* const kRefreshTokenKey = "refresh_token";
 
 // ─── Per-database state ───────────────────────────────────────────────────────
 // CREATE SECRET functions are plain function pointers, so they cannot capture
@@ -133,6 +138,25 @@ static std::string CacheKey(const SecretEntry& entry) {
 
 bool CloudSecretRegistry::ResolveAuth(const std::string& url, const std::string& secret_type,
                                       std::shared_ptr<ICloudAuthProvider>& out, std::string& err) {
+    SecretRef ref;
+    return Resolve(url, secret_type, out, ref, err);
+}
+
+bool CloudSecretRegistry::GetAccessToken(const std::string& url, const std::string& secret_type,
+                                         std::string& out_token, std::string& err) {
+    std::shared_ptr<ICloudAuthProvider> auth;
+    SecretRef ref;
+    if (!Resolve(url, secret_type, auth, ref, err))
+        return false;
+    if (!auth->GetAccessToken(out_token, err))
+        return false;
+    PersistRefreshToken(ref, *auth);
+    return true;
+}
+
+bool CloudSecretRegistry::Resolve(const std::string& url, const std::string& secret_type,
+                                  std::shared_ptr<ICloudAuthProvider>& out, SecretRef& ref,
+                                  std::string& err) {
     try {
         auto& manager = SecretManager::Get(db_);
         auto transaction = CatalogTransaction::GetSystemTransaction(db_);
@@ -152,24 +176,35 @@ bool CloudSecretRegistry::ResolveAuth(const std::string& url, const std::string&
         // The fingerprint covers everything the factory reads, so a secret
         // replaced under the same name gets a fresh auth provider.
         SecretParams params;
+        std::string stored_refresh_token;
         std::string material = kv->GetProvider();
         for (auto& option : kv->secret_map) { // ordered map: stable iteration
             auto key = StringUtil::Lower(option.first);
             auto value = option.second.ToString();
+            if (key == kRefreshTokenKey) {
+                stored_refresh_token = std::move(value);
+                continue;
+            }
             material += '\x1f' + key + '\x1e' + value;
             params.values[key] = std::move(value);
         }
         const size_t fingerprint = std::hash<std::string>()(material);
-        const std::string cache_key = CacheKey(*match.secret_entry);
+        ref.cache_key = CacheKey(*match.secret_entry);
+        ref.name = kv->GetName();
+        ref.storage = match.secret_entry->storage_mode;
 
         std::lock_guard<std::mutex> lk(mu_);
-        auto cached = auth_cache_.find(cache_key);
+        auto cached = auth_cache_.find(ref.cache_key);
         if (cached != auth_cache_.end() && cached->second.fingerprint == fingerprint) {
             out = cached->second.auth;
             return true;
         }
 
         auto auth = Build(kv->GetType(), kv->GetProvider(), params);
+        // A refresh token saved by an earlier process lets this one obtain an
+        // access token without interactive authorization.
+        if (!stored_refresh_token.empty())
+            auth->DeserializeState({{kRefreshTokenKey, stored_refresh_token}});
 
         // A cache miss is rare (first use or changed secret), so it is a cheap
         // moment to forget the tokens of secrets that no longer exist.
@@ -183,13 +218,51 @@ bool CloudSecretRegistry::ResolveAuth(const std::string& url, const std::string&
                 it = auth_cache_.erase(it);
         }
 
-        auth_cache_[cache_key] = CachedAuth{fingerprint, auth};
+        auth_cache_[ref.cache_key] = CachedAuth{fingerprint, auth, stored_refresh_token};
         out = std::move(auth);
         return true;
     } catch (std::exception& ex) {
         ErrorData error(ex);
         err = "cloudfs: cannot use secret for '" + url + "': " + error.RawMessage();
         return false;
+    }
+}
+
+void CloudSecretRegistry::PersistRefreshToken(const SecretRef& ref,
+                                              ICloudAuthProvider& auth) noexcept {
+    try {
+        std::unordered_map<std::string, std::string> state;
+        auth.SerializeState(state);
+        auto it = state.find(kRefreshTokenKey);
+        if (it == state.end() || it->second.empty())
+            return; // not an OAuth provider, or nothing to keep
+        const std::string& refresh_token = it->second;
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            auto cached = auth_cache_.find(ref.cache_key);
+            if (cached == auth_cache_.end() || cached->second.stored_refresh_token == refresh_token)
+                return; // already recorded (the common case)
+            // Record it first: whatever happens below, do not retry on every call.
+            cached->second.stored_refresh_token = refresh_token;
+        }
+
+        auto& manager = SecretManager::Get(db_);
+        auto transaction = CatalogTransaction::GetSystemTransaction(db_);
+        auto entry = manager.GetSecretByName(transaction, ref.name, ref.storage);
+        // Temporary secrets die with the process; only persistent ones are worth updating.
+        if (!entry || entry->persist_type != SecretPersistType::PERSISTENT)
+            return;
+        auto* kv = dynamic_cast<const KeyValueSecret*>(entry->secret.get());
+        if (!kv)
+            return;
+        auto updated = make_uniq<KeyValueSecret>(*kv);
+        updated->secret_map[kRefreshTokenKey] = Value(refresh_token);
+        updated->redact_keys.insert(kRefreshTokenKey);
+        manager.RegisterSecret(transaction, std::move(updated),
+                               OnCreateConflict::REPLACE_ON_CONFLICT, SecretPersistType::PERSISTENT,
+                               ref.storage);
+    } catch (...) {
+        // Persisting is an optimisation; the access token in hand is still good.
     }
 }
 
