@@ -26,7 +26,12 @@ static std::string Require(const SecretParams& p, const char* key, const char* w
     return v;
 }
 
-static const char* const kAzureCliClientId = "04b07795-8542-4c45-a7a4-26c5a3e61e39";
+// Fallback client for the Microsoft device-code login when CLIENT_ID is not
+// given: Microsoft's first-party Azure CLI application (AZURE_CLI_CLIENT_ID in
+// azure-cli-core).  Its Graph permissions are Microsoft's to define and a
+// tenant may block device code for it, so docs/CREDENTIALS.md recommends
+// registering your own app and passing its CLIENT_ID.
+static const char* const kAzureCliClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46";
 static const char* const kGraphDefaultScope = "https://graph.microsoft.com/.default";
 
 // ─────────────────────────────────────────────────────────────────────────────
