@@ -76,6 +76,29 @@ SELECT * FROM read_parquet('dbxfs://data/f.parquet') LIMIT 1;
 ----
 Error
 
+# Listing failures must not be reported as "no files found" (#19)
+statement error
+SELECT * FROM read_csv('vfs://127.0.0.1:1/data/*.csv');
+----
+no auth for 'vfs'
+
+statement error
+SELECT * FROM read_csv('vfs://127.0.0.1:1/data/f.csv');
+----
+no auth for 'vfs'
+
+# Transport errors surface too (port 1 refuses connections)
+statement ok
+CREATE OR REPLACE SECRET v (TYPE vfs, PROVIDER token, TOKEN 'tok');
+
+statement error
+SELECT * FROM read_csv('vfs://127.0.0.1:1/data/*.csv');
+----
+cannot expand
+
+statement ok
+DROP SECRET v;
+
 # Cleanup
 statement ok
 DROP SECRET sp; DROP SECRET od; DROP SECRET gd; DROP SECRET dbx;

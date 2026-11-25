@@ -225,7 +225,11 @@ bool SFTPBackend::Stat(const std::string& root, const std::string& path, const s
 
     LIBSSH2_SFTP_ATTRIBUTES attrs{};
     if (libssh2_sftp_stat(conn.sftp, path.c_str(), &attrs) != 0) {
-        err = "sftp stat failed: " + path;
+        auto sftp_err = libssh2_sftp_last_error(conn.sftp);
+        if (sftp_err == LIBSSH2_FX_NO_SUCH_FILE || sftp_err == LIBSSH2_FX_NO_SUCH_PATH)
+            err = CloudError::NotFound(path);
+        else
+            err = "sftp stat failed: " + path + " (sftp error " + std::to_string(sftp_err) + ")";
         return false;
     }
     out.id = path; // SFTP uses paths as IDs

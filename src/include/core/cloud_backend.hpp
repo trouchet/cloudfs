@@ -25,6 +25,25 @@ struct ProviderCapabilities {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CloudError
+//
+// Backends report failures as (false, err-string).  The one failure callers
+// must tell apart is "the item does not exist": FileExists() and Glob() answer
+// it with false / no matches, while every other failure (auth, network,
+// permissions, throttling) has to reach the user as an error.
+//
+// Stat() implementations MUST build their not-found error with NotFound().
+// ─────────────────────────────────────────────────────────────────────────────
+namespace CloudError {
+inline std::string NotFound(const std::string& what) {
+    return "not found: " + what;
+}
+inline bool IsNotFound(const std::string& err) {
+    return err.rfind("not found: ", 0) == 0;
+}
+} // namespace CloudError
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ICloudBackend
 //
 // THE central abstraction.  Adding a new cloud storage provider means
@@ -69,6 +88,7 @@ class ICloudBackend {
 
     // Resolve a (root, path) pair to a CloudItem.
     // Called by OpenFile(), FileExists(), GetFileSize(), etc.
+    // A missing item must be reported with err = CloudError::NotFound(path).
     virtual bool Stat(const std::string& root, const std::string& path,
                       const std::string& access_token, CloudItem& out_item, std::string& err) = 0;
 

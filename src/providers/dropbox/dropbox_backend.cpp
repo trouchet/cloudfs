@@ -57,7 +57,7 @@ bool DropboxBackend::Stat(const std::string&, const std::string& path, const std
     req.body = "{\"path\":\"" + path + "\"}";
     auto resp = http_.Execute(req);
     if (resp.status == 409) {
-        err = "not found: " + path;
+        err = CloudError::NotFound(path);
         return false;
     }
     if (!resp.ok()) {

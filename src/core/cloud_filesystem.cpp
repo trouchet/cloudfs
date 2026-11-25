@@ -37,6 +37,15 @@ static void Throw(const std::string& msg) {
         throw IOException(msg);
 }
 
+// A lookup failed.  "Does not exist" is a normal answer for existence checks
+// and globs; anything else (auth, network, permissions) must not be reported
+// as "no such file", so it is raised.
+static void ThrowUnlessNotFound(const std::string& url, const std::string& err) {
+    if (CloudError::IsNotFound(err))
+        return;
+    throw IOException("cloudfs: cannot access '" + url + "': " + err);
+}
+
 // ─── CloudFileHandle ──────────────────────────────────────────────────────────
 CloudFileHandle::CloudFileHandle(CloudFileSystem& fs, const std::string& path,
                                  ICloudBackend& backend_, const CloudItem& item_,
@@ -378,8 +387,10 @@ bool CloudFileSystem::FileExists(const string& path, optional_ptr<FileOpener>) {
         return false;
     CloudItem item;
     std::string root_id, err;
-    if (!ResolvePath(*b, path, item, root_id, err))
+    if (!ResolvePath(*b, path, item, root_id, err)) {
+        ThrowUnlessNotFound(path, err);
         return false;
+    }
     return !item.is_folder;
 }
 
@@ -389,8 +400,10 @@ bool CloudFileSystem::DirectoryExists(const string& path, optional_ptr<FileOpene
         return false;
     CloudItem item;
     std::string root_id, err;
-    if (!ResolvePath(*b, path, item, root_id, err))
+    if (!ResolvePath(*b, path, item, root_id, err)) {
+        ThrowUnlessNotFound(path, err);
         return false;
+    }
     return item.is_folder;
 }
 
@@ -505,18 +518,28 @@ bool CloudFileSystem::ListFiles(const string& dir,
         return false;
     CloudItem folder;
     std::string root_id, err;
-    if (!ResolvePath(*b, dir, folder, root_id, err) || !folder.is_folder)
+    if (!ResolvePath(*b, dir, folder, root_id, err)) {
+        ThrowUnlessNotFound(dir, err);
+        return false;
+    }
+    if (!folder.is_folder)
         return false;
     std::string tok;
     if (!GetToken(b->Scheme(), tok, err))
-        return false;
+        throw IOException("cloudfs: cannot list '" + dir + "': " + err);
+    // Collect first: a failure on a later page must not leave the caller with
+    // a partial listing it already acted on.
+    std::vector<std::pair<std::string, bool>> entries;
     std::string cursor;
     do {
         if (!b->ListFolder(
-                root_id, folder.id, tok, [&](const CloudItem& c) { cb(c.name, c.is_folder); },
-                cursor, err))
-            return false;
+                root_id, folder.id, tok,
+                [&](const CloudItem& c) { entries.emplace_back(c.name, c.is_folder); }, cursor,
+                err))
+            throw IOException("cloudfs: cannot list '" + dir + "': " + err);
     } while (!cursor.empty());
+    for (auto& e : entries)
+        cb(e.first, e.second);
     return true;
 }
 
@@ -533,15 +556,16 @@ void CloudFileSystem::GlobRecursive(ICloudBackend& backend, const std::string& r
         std::string scheme_base =
             (auth_end != std::string::npos) ? scheme_prefix.substr(0, auth_end) : scheme_prefix;
         std::string err;
-        backend.ListFolderRecursive(
-            root_id, folder_id, tok,
-            [&](const CloudItem& c) {
-                if (c.is_folder || c.path.empty())
-                    return;
-                if (glob_match(file_pattern.c_str(), c.name.c_str()) == 0)
-                    results.emplace_back(scheme_base + c.path);
-            },
-            err);
+        if (!backend.ListFolderRecursive(
+                root_id, folder_id, tok,
+                [&](const CloudItem& c) {
+                    if (c.is_folder || c.path.empty())
+                        return;
+                    if (glob_match(file_pattern.c_str(), c.name.c_str()) == 0)
+                        results.emplace_back(scheme_base + c.path);
+                },
+                err))
+            throw IOException("cloudfs: cannot list '" + scheme_prefix + "': " + err);
         return;
     }
     // Default path: iterate with ListFolder, recurse manually for subdirectories.
@@ -551,7 +575,7 @@ void CloudFileSystem::GlobRecursive(ICloudBackend& backend, const std::string& r
         bool ok = backend.ListFolder(
             root_id, folder_id, tok, [&](const CloudItem& c) { batch.push_back(c); }, cursor, err);
         if (!ok)
-            break;
+            throw IOException("cloudfs: cannot list '" + scheme_prefix + "': " + err);
         for (auto& child : batch) {
             std::string child_url = scheme_prefix + "/" + child.name;
             int match = glob_match(file_pattern.c_str(), child.name.c_str());
@@ -581,25 +605,26 @@ vector<OpenFileInfo> CloudFileSystem::Glob(const string& path, FileOpener*) {
         return results;
     }
 
+    const std::string fail = "cloudfs: cannot expand '" + path + "': ";
     std::string raw_root, item_path, err;
     if (!b->ParseUrl(path, raw_root, item_path, err))
-        return results;
+        throw IOException(fail + err);
 
     // Resolve root (with cache)
     std::string root_id;
     if (!cache_.GetRootId(b->Scheme(), raw_root, root_id)) {
         std::string tok;
         if (!GetToken(b->Scheme(), tok, err))
-            return results;
+            throw IOException(fail + err);
         if (!b->ResolveRoot(raw_root, tok, root_id, err))
-            return results;
+            throw IOException(fail + err);
         cache_.PutRootId(b->Scheme(), raw_root, root_id);
     }
 
     // Get access token
     std::string tok;
     if (!GetToken(b->Scheme(), tok, err))
-        return results;
+        throw IOException(fail + err);
 
     // Split item_path into static prefix and glob portion
     auto star_pos = item_path.find_first_of("*?[");
@@ -612,8 +637,11 @@ vector<OpenFileInfo> CloudFileSystem::Glob(const string& path, FileOpener*) {
 
     // Resolve starting folder
     CloudItem start_folder;
-    if (!b->Stat(root_id, static_prefix, tok, start_folder, err))
-        return results;
+    if (!b->Stat(root_id, static_prefix, tok, start_folder, err)) {
+        if (CloudError::IsNotFound(err))
+            return results; // the folder does not exist: no matches
+        throw IOException(fail + err);
+    }
 
     // Build the result URL prefix from the original path
     auto star_pos_in_path = path.find_first_of("*?[");
