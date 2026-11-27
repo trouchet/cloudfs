@@ -38,6 +38,10 @@ Planned work is tracked in the
   `cloudfs: no secret matches '<url>'. Run: CREATE SECRET (TYPE <type>, ...)`.
 - `du()` reports cumulative totals for each directory.
 - API responses are parsed with yyjson instead of substring search.
+- **Google Drive `PROVIDER oauth` uses the desktop-app flow** (loopback redirect
+  with PKCE) instead of the device flow, which Google does not allow for the
+  Drive scope. It needs an OAuth client of type "Desktop app"; `REDIRECT_PORT`
+  optionally fixes the port of the local listener.
 - Several databases in one process can load the extension independently.
 - README rewritten to match the current build, secret providers and URL formats.
 

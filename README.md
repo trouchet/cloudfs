@@ -17,8 +17,8 @@
   exploration
 - **Metadata Caching**: TTL-based cache for resolved paths, download URLs and
   drive IDs
-- **Auth via DuckDB Secrets**: OAuth2 device code, client credentials, service
-  account, SSH keys and static tokens
+- **Auth via DuckDB Secrets**: OAuth2 device code and loopback, client
+  credentials, service account, SSH keys and static tokens
 - **Range Reads**: Only the bytes DuckDB asks for are downloaded (Parquet
   footers, projected columns)
 
@@ -114,7 +114,7 @@ SELECT * FROM du('odfs://me/Projects/');
 | `onedrive`   | `oauth` (default)    | `TENANT_ID`, `CLIENT_ID` (both optional)            |
 | `onedrive`   | `client_credentials` | `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `SCOPE`  |
 | `onedrive`   | `token`              | `TOKEN`                                             |
-| `gdrive`     | `oauth` (default)    | `CLIENT_ID`, `CLIENT_SECRET`                        |
+| `gdrive`     | `oauth` (default)    | `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_PORT`       |
 | `gdrive`     | `service_account`    | `KEY_JSON` (contents of the service account key)    |
 | `gdrive`     | `token`              | `TOKEN`                                             |
 | `dropbox`    | `oauth` (default)    | `APP_KEY`, `APP_SECRET`                             |
@@ -124,9 +124,11 @@ SELECT * FROM du('odfs://me/Projects/');
 | `sftp`       | `password`           | `PASSWORD`, `HOST`, `USER`                          |
 | `vfs`        | `token`              | `TOKEN`                                             |
 
-The `oauth` providers are interactive: the first access prints a URL (and a
-code) on stderr and waits for you to authorize in a browser. They also accept
-`PERSIST_TOKEN` (default `true`); see
+The `oauth` providers are interactive: the first access prints a URL (and, for
+the device-code providers, a code) on stderr and waits for you to authorize in a
+browser. Google Drive redirects the browser back to a temporary listener on
+`127.0.0.1`, so the browser has to run on, or be forwarded to, the same machine.
+They also accept `PERSIST_TOKEN` (default `true`); see
 [Getting Credentials](docs/CREDENTIALS.md).
 
 **Where do these values come from?** [docs/CREDENTIALS.md](docs/CREDENTIALS.md)
@@ -147,10 +149,6 @@ SELECT cloudfs_clear_cache('spfs'); -- drop cached metadata for one scheme
 
 ## ⚠️ Known Limitations
 
-- **Google Drive interactive login does not work yet.** `gdrive` with
-  `PROVIDER oauth` uses a flow for which Google does not allow the full Drive
-  scope ([#40](https://github.com/trouchet/cloudfs/issues/40)). Use
-  `service_account` or `token`.
 - **Google service accounts can only write into shared drives.** They can read
   anything shared with them, but Google gives them no storage of their own.
 - **Only the VFS backend is tested end to end.** The SharePoint, OneDrive,

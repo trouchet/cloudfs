@@ -1,92 +1,19 @@
 #include "core/cloud_http.hpp"
+#include "core/cloud_loopback.hpp"
 
 #include "providers/gdrive_backend.hpp"
 
 #include <chrono>
 #include <iostream>
-#include <thread>
+#include <utility>
 #include <vector>
 
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/rand.h>
 
 namespace duckdb {
-
-// ─── GDriveOAuthProvider ──────────────────────────────────────────────────────
-bool GDriveOAuthProvider::AcquireToken(std::string& err) {
-    // Google Device Authorization Grant (RFC 8628)
-    std::string body = "client_id=" + client_id_ + "&scope=" + std::string(kScope);
-    std::string resp = PostForm(kDeviceUrl, body, err);
-    if (resp.empty())
-        return false;
-
-    std::string device_code = JsonGet(resp, "device_code");
-    std::string user_code = JsonGet(resp, "user_code");
-    std::string verify_url = JsonGet(resp, "verification_url");
-    int expires_in = JsonGetInt(resp, "expires_in");
-    int interval = std::max(JsonGetInt(resp, "interval"), 5);
-
-    if (device_code.empty()) {
-        err = "no device_code from Google";
-        return false;
-    }
-    std::cerr << "\n[cloudfs Google Drive] Authenticate at: " << verify_url
-              << "\nCode: " << user_code << "\nWaiting...\n";
-
-    auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(expires_in);
-    while (std::chrono::system_clock::now() < deadline) {
-        std::this_thread::sleep_for(std::chrono::seconds(interval));
-        std::string b = "client_id=" + client_id_ + "&client_secret=" + client_secret_ +
-                        "&device_code=" + device_code +
-                        "&grant_type=urn:ietf:params:oauth:grant-type:device_code";
-        std::string r = PostForm(kTokenUrl, b, err);
-        if (r.empty())
-            continue;
-        std::string ec = JsonGet(r, "error");
-        if (ec == "authorization_pending" || ec == "slow_down") {
-            if (ec == "slow_down")
-                interval += 5;
-            continue;
-        }
-        if (!ec.empty()) {
-            err = ec;
-            return false;
-        }
-        std::string at = JsonGet(r, "access_token");
-        if (at.empty())
-            continue;
-        token_.SetFromResponse(at, JsonGet(r, "refresh_token"),
-                               std::max(JsonGetInt(r, "expires_in"), 3600));
-        std::cerr << "[cloudfs Google Drive] Authenticated.\n";
-        return true;
-    }
-    err = "timed out";
-    return false;
-}
-
-bool GDriveOAuthProvider::RefreshToken(std::string& err) {
-    std::string body = "client_id=" + client_id_ + "&client_secret=" + client_secret_ +
-                       "&refresh_token=" + token_.refresh_token + "&grant_type=refresh_token";
-    std::string resp = PostForm(kTokenUrl, body, err);
-    if (resp.empty() || !JsonGet(resp, "error").empty())
-        return false;
-    token_.SetFromResponse(JsonGet(resp, "access_token"), token_.refresh_token,
-                           std::max(JsonGetInt(resp, "expires_in"), 3600));
-    return !token_.access_token.empty();
-}
-
-// ─── GDriveServiceAccountAuth ─────────────────────────────────────────────────
-GDriveServiceAccountAuth::GDriveServiceAccountAuth(std::string key_json)
-    : OAuth2AuthBase("gdrive-sa") {
-    // The key file is a flat JSON object.  Parsing it properly also turns the
-    // "\n" escapes of private_key into real newlines, which PEM requires.
-    auto get = [&](const std::string& k) { return JsonUtil::GetString(key_json, k); };
-    project_id_ = get("project_id");
-    client_email_ = get("client_email");
-    private_key_id_ = get("private_key_id");
-    private_key_ = get("private_key");
-}
 
 // Base64url encoding helper (RFC 4648 §5, no padding)
 static std::string GDriveBase64Url(const unsigned char* data, size_t len) {
@@ -117,6 +44,127 @@ static std::string GDriveBase64Url(const unsigned char* data, size_t len) {
 
 static std::string GDriveBase64UrlStr(const std::string& s) {
     return GDriveBase64Url(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+}
+
+// ─── GDriveOAuthProvider ──────────────────────────────────────────────────────
+std::string GDriveOAuthProvider::RandomUrlToken(size_t bytes) {
+    std::vector<unsigned char> buf(bytes);
+    if (RAND_bytes(buf.data(), static_cast<int>(buf.size())) != 1)
+        return "";
+    return GDriveBase64Url(buf.data(), buf.size());
+}
+
+std::string GDriveOAuthProvider::PkceChallenge(const std::string& code_verifier) {
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int len = 0;
+    if (EVP_Digest(code_verifier.data(), code_verifier.size(), digest, &len, EVP_sha256(),
+                   nullptr) != 1)
+        return "";
+    return GDriveBase64Url(digest, len);
+}
+
+std::string GDriveOAuthProvider::BuildAuthUrl(const std::string& client_id,
+                                              const std::string& redirect_uri,
+                                              const std::string& state,
+                                              const std::string& code_challenge) {
+    return std::string(kAuthUrl) + "?" +
+           UrlUtil::BuildQuery({{"client_id", client_id},
+                                {"redirect_uri", redirect_uri},
+                                {"response_type", "code"},
+                                {"scope", kScope},
+                                {"code_challenge", code_challenge},
+                                {"code_challenge_method", "S256"},
+                                {"state", state}});
+}
+
+bool GDriveOAuthProvider::AcquireToken(std::string& err) {
+    // OAuth 2.0 for desktop apps: loopback redirect (RFC 8252) with PKCE (RFC 7636).
+    if (client_id_.empty()) {
+        err = "gdrive oauth: CLIENT_ID is required (an OAuth client of type \"Desktop app\")";
+        return false;
+    }
+    // 32 random bytes encode to 43 characters, the minimum verifier length.
+    std::string verifier = RandomUrlToken(32);
+    std::string state = RandomUrlToken(16);
+    std::string challenge = PkceChallenge(verifier);
+    if (verifier.empty() || state.empty() || challenge.empty()) {
+        err = "gdrive oauth: could not generate the PKCE parameters";
+        return false;
+    }
+
+    LoopbackCodeReceiver receiver;
+    if (!receiver.Listen(redirect_port_, err)) {
+        err = "gdrive oauth: " + err;
+        return false;
+    }
+    std::string redirect_uri = receiver.RedirectUri();
+
+    std::cerr
+        << "\n[cloudfs Google Drive] Open this URL in a browser on this machine to authorize:\n\n  "
+        << BuildAuthUrl(client_id_, redirect_uri, state, challenge)
+        << "\n\nWaiting for the redirect on " << redirect_uri << " (up to "
+        << kAuthorizeTimeoutSeconds / 60 << " minutes)...\n";
+
+    std::string code;
+    if (!receiver.WaitForCode(state, kAuthorizeTimeoutSeconds, code, err)) {
+        err = "gdrive oauth: " + err;
+        return false;
+    }
+    receiver.Close();
+
+    std::vector<std::pair<std::string, std::string>> form = {{"client_id", client_id_},
+                                                             {"code", code},
+                                                             {"code_verifier", verifier},
+                                                             {"grant_type", "authorization_code"},
+                                                             {"redirect_uri", redirect_uri}};
+    if (!client_secret_.empty())
+        form.emplace_back("client_secret", client_secret_);
+    std::string resp = PostForm(kTokenUrl, UrlUtil::BuildQuery(form), err);
+    if (resp.empty()) {
+        err = "gdrive oauth: token request failed: " + err;
+        return false;
+    }
+    std::string ec = JsonGet(resp, "error");
+    if (!ec.empty()) {
+        err = "gdrive oauth: " + ec + " — " + JsonGet(resp, "error_description");
+        return false;
+    }
+    std::string at = JsonGet(resp, "access_token");
+    if (at.empty()) {
+        err = "gdrive oauth: no access_token in the token response";
+        return false;
+    }
+    token_.SetFromResponse(at, JsonGet(resp, "refresh_token"),
+                           std::max(JsonGetInt(resp, "expires_in"), 60));
+    std::cerr << "[cloudfs Google Drive] Authenticated.\n";
+    return true;
+}
+
+bool GDriveOAuthProvider::RefreshToken(std::string& err) {
+    std::vector<std::pair<std::string, std::string>> form = {
+        {"client_id", client_id_},
+        {"refresh_token", token_.refresh_token},
+        {"grant_type", "refresh_token"}};
+    if (!client_secret_.empty())
+        form.emplace_back("client_secret", client_secret_);
+    std::string resp = PostForm(kTokenUrl, UrlUtil::BuildQuery(form), err);
+    if (resp.empty() || !JsonGet(resp, "error").empty())
+        return false;
+    token_.SetFromResponse(JsonGet(resp, "access_token"), token_.refresh_token,
+                           std::max(JsonGetInt(resp, "expires_in"), 60));
+    return !token_.access_token.empty();
+}
+
+// ─── GDriveServiceAccountAuth ─────────────────────────────────────────────────
+GDriveServiceAccountAuth::GDriveServiceAccountAuth(std::string key_json)
+    : OAuth2AuthBase("gdrive-sa") {
+    // The key file is a flat JSON object.  Parsing it properly also turns the
+    // "\n" escapes of private_key into real newlines, which PEM requires.
+    auto get = [&](const std::string& k) { return JsonUtil::GetString(key_json, k); };
+    project_id_ = get("project_id");
+    client_email_ = get("client_email");
+    private_key_id_ = get("private_key_id");
+    private_key_ = get("private_key");
 }
 
 std::string GDriveServiceAccountAuth::SignJWT() const {

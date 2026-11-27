@@ -120,23 +120,39 @@ class GDriveBackend : public ICloudBackend {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GDriveOAuthProvider
-// OAuth2 PKCE flow for Google Drive (user-facing interactive auth).
+// Interactive login for Google Drive: the OAuth 2.0 flow for desktop apps with
+// a loopback redirect and PKCE.  The user opens a URL in a browser, Google
+// redirects back to a listener on 127.0.0.1, and the code is exchanged for
+// tokens.  (Google's device flow cannot be used: it does not allow the Drive
+// scope.)  Needs an OAuth client of type "Desktop app".
 // ─────────────────────────────────────────────────────────────────────────────
 class GDriveOAuthProvider : public OAuth2AuthBase {
   public:
-    GDriveOAuthProvider(std::string client_id, std::string client_secret)
+    // redirect_port 0 lets the system pick a free port for the listener.
+    GDriveOAuthProvider(std::string client_id, std::string client_secret, int redirect_port = 0)
         : OAuth2AuthBase("gdrive"), client_id_(std::move(client_id)),
-          client_secret_(std::move(client_secret)) {}
+          client_secret_(std::move(client_secret)), redirect_port_(redirect_port) {}
+
+    // The URL the user opens to authorize.  Exposed for tests.
+    static std::string BuildAuthUrl(const std::string& client_id, const std::string& redirect_uri,
+                                    const std::string& state, const std::string& code_challenge);
+    // PKCE S256 challenge for a verifier: BASE64URL(SHA256(verifier)), no padding.
+    static std::string PkceChallenge(const std::string& code_verifier);
+    // `bytes` random bytes, base64url encoded ("" if no randomness is available).
+    static std::string RandomUrlToken(size_t bytes);
 
   protected:
-    bool AcquireToken(std::string& err) override; // Device Code Flow (Google)
+    bool AcquireToken(std::string& err) override;
     bool RefreshToken(std::string& err) override;
 
   private:
     std::string client_id_, client_secret_;
+    int redirect_port_;
     static constexpr const char* kScope = "https://www.googleapis.com/auth/drive";
+    static constexpr const char* kAuthUrl = "https://accounts.google.com/o/oauth2/v2/auth";
     static constexpr const char* kTokenUrl = "https://oauth2.googleapis.com/token";
-    static constexpr const char* kDeviceUrl = "https://oauth2.googleapis.com/device/code";
+    // How long to wait for the user to finish in the browser.
+    static constexpr int kAuthorizeTimeoutSeconds = 300;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
