@@ -12,7 +12,7 @@ label does not match.
 | OneDrive     | `onedrive`   | `oauth`              | An app registration (recommended)          |
 | OneDrive     | `onedrive`   | `client_credentials` | App registration + client secret + consent |
 | Google Drive | `gdrive`     | `service_account`    | A service account JSON key                 |
-| Google Drive | `gdrive`     | `oauth`              | See the warning in that section            |
+| Google Drive | `gdrive`     | `oauth`              | A "Desktop app" OAuth client ID            |
 | Dropbox      | `dropbox`    | `oauth`              | An app key and app secret                  |
 | SFTP         | `sftp`       | `keyfile` / `agent`  | An SSH key                                 |
 | any of these | …            | `token`              | A bearer token you obtained yourself       |
@@ -198,13 +198,51 @@ Notes:
 
 ### Interactive login (`PROVIDER oauth`)
 
-> **Not usable at present.** CloudFS implements Google's
-> [device flow](https://developers.google.com/identity/protocols/oauth2/limited-input-device)
-> and requests the full `https://www.googleapis.com/auth/drive` scope. Google
-> supports that flow only for a short list of scopes, which for Drive are
-> `drive.appdata` and `drive.file`, so the request is expected to be rejected.
-> Tracked in [#40](https://github.com/trouchet/cloudfs/issues/40). Use
-> `service_account` or `token` until it is resolved.
+CloudFS uses Google's
+[OAuth 2.0 flow for desktop apps](https://developers.google.com/identity/protocols/oauth2/native-app)
+with a loopback redirect and PKCE: you open a URL in a browser, sign in, and
+Google redirects the browser to a short-lived listener on `127.0.0.1` that
+CloudFS opened for the occasion.
+
+1. Configure the OAuth consent screen for your project:
+   [Configure OAuth consent](https://developers.google.com/workspace/guides/configure-oauth-consent).
+1. Create an OAuth client ID as described in
+   [Create access credentials](https://developers.google.com/workspace/guides/create-credentials#desktop-app):
+   on the **Clients** page click **Create client** and select the **Desktop
+   app** application type. Other client types are rejected with
+   `redirect_uri_mismatch`.
+1. Copy the client ID and the client secret.
+
+```sql
+CREATE PERSISTENT SECRET gd (
+    TYPE gdrive,
+    PROVIDER oauth,
+    CLIENT_ID '<client-id>.apps.googleusercontent.com',
+    CLIENT_SECRET '<client-secret>'
+);
+```
+
+The first query against `gdfs://` prints the authorization URL on stderr and
+waits up to five minutes for you to finish in the browser.
+
+Notes:
+
+- **The browser must reach `127.0.0.1` on the machine running DuckDB.** On a
+  remote machine, set a fixed port with `REDIRECT_PORT 8085` and forward it
+  (`ssh -L 8085:127.0.0.1:8085 host`) before opening the URL locally. Without
+  `REDIRECT_PORT`, a free port is picked for each login.
+- **Refresh tokens of apps in "Testing" expire after 7 days.** Google states
+  that a project "with an OAuth consent screen configured for an external user
+  type and a publishing status of "Testing" is issued a refresh token expiring
+  in 7 days"
+  ([Using OAuth 2.0](https://developers.google.com/identity/protocols/oauth2#expiration)).
+  Expect to sign in again weekly unless the app is internal to your organization
+  or published.
+- Google shows an "unverified app" warning for apps that request Drive access
+  and have not completed its verification process.
+- Google's device flow ("enter this code on another device") is not used because
+  it
+  [does not allow the Drive scope](https://developers.google.com/identity/protocols/oauth2/limited-input-device).
 
 ### A token you already have (`PROVIDER token`)
 

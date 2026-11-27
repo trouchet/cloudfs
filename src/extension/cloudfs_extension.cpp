@@ -97,10 +97,23 @@ static void RegisterSecretProviders(ExtensionLoader& loader, CloudSecretRegistry
                      });
 
     // ── Google Drive ──────────────────────────────────────────────────────────
-    secrets.Register(loader, "gdrive", "oauth", {"client_id", "client_secret", "persist_token"},
+    secrets.Register(loader, "gdrive", "oauth",
+                     {"client_id", "client_secret", "redirect_port", "persist_token"},
                      [](const SecretParams& p) -> AuthPtr {
+                         // 0 (the default) lets the system pick a free port.
+                         int port = 0;
+                         auto port_text = p.Get("redirect_port");
+                         if (!port_text.empty()) {
+                             bool digits = port_text.size() <= 5;
+                             for (char c : port_text)
+                                 digits = digits && c >= '0' && c <= '9';
+                             port = digits ? std::stoi(port_text) : -1;
+                             if (port < 0 || port > 65535)
+                                 throw InvalidInputException(
+                                     "gdrive oauth: REDIRECT_PORT must be a port number (0-65535)");
+                         }
                          return std::make_shared<GDriveOAuthProvider>(p.Get("client_id"),
-                                                                      p.Get("client_secret"));
+                                                                      p.Get("client_secret"), port);
                      });
     secrets.Register(loader, "gdrive", "service_account", {"key_json"},
                      [](const SecretParams& p) -> AuthPtr {

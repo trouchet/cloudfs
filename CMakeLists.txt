@@ -22,9 +22,13 @@ find_path(LIBSSH2_INCLUDE_DIRS NAMES libssh2.h)
 include_directories(src/include)
 
 set(CORE_SOURCES
-    src/core/cloud_cache.cpp src/core/cloud_http.cpp src/core/cloud_auth.cpp
-    src/core/cloud_filesystem.cpp src/core/cloud_secret.cpp
-    src/core/cloud_table_functions.cpp)
+    src/core/cloud_cache.cpp
+    src/core/cloud_http.cpp
+    src/core/cloud_auth.cpp
+    src/core/cloud_filesystem.cpp
+    src/core/cloud_secret.cpp
+    src/core/cloud_table_functions.cpp
+    src/core/cloud_loopback.cpp)
 
 set(PROVIDER_SOURCES
     src/providers/sharepoint/sharepoint_backend.cpp

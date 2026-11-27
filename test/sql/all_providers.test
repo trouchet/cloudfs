@@ -184,6 +184,26 @@ persist_token
 statement ok
 DROP SECRET optout;
 
+# gdrive oauth: REDIRECT_PORT fixes the port of the loopback listener (#40)
+statement ok
+CREATE SECRET gport (TYPE gdrive, PROVIDER oauth, CLIENT_ID 'c', REDIRECT_PORT 8085);
+
+statement ok
+CREATE OR REPLACE SECRET gport (TYPE gdrive, PROVIDER oauth, CLIENT_ID 'c', REDIRECT_PORT '0');
+
+statement error
+CREATE OR REPLACE SECRET gport (TYPE gdrive, PROVIDER oauth, CLIENT_ID 'c', REDIRECT_PORT 99999);
+----
+REDIRECT_PORT must be a port number
+
+statement error
+CREATE OR REPLACE SECRET gport (TYPE gdrive, PROVIDER oauth, CLIENT_ID 'c', REDIRECT_PORT 'web');
+----
+REDIRECT_PORT must be a port number
+
+statement ok
+DROP SECRET gport;
+
 # Cleanup
 statement ok
 DROP SECRET sp; DROP SECRET od; DROP SECRET gd; DROP SECRET dbx;

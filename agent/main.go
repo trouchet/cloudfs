@@ -41,7 +41,7 @@ var (
 	flagKey      = flag.String("key", "", "TLS private key file")
 	flagReadOnly = flag.Bool("read-only", false, "Disable write operations")
 	flagMaxSize  = flag.Int64("max-upload-mb", 10240, "Max upload size in MB")
-	flagVersion  = "0.1.0"
+	flagVersion  = "0.2.0"
 )
 
 // ─── Item represents a file or directory ─────────────────────────────────────
