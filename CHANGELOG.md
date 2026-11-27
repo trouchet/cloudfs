@@ -3,10 +3,10 @@
 All notable changes to CloudFS are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] - v0.2.0
+## v0.2.0 - 2026-11-27
 
-Planned work is tracked in the
-[v0.2.0 milestone](https://github.com/trouchet/cloudfs/milestone/1).
+The issues behind this release are in the
+[v0.2.0 milestone](https://github.com/trouchet/cloudfs/milestone/1?closed=1).
 
 ### Added
 
