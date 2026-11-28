@@ -9,6 +9,18 @@ SELECT cloudfs_version() LIKE '%cloudfs%';
 ----
 true
 
+# cloudfs_version() reports the same version DuckDB records for the extension
+query I
+SELECT cloudfs_version() = 'cloudfs ' || extension_version
+FROM duckdb_extensions() WHERE extension_name = 'cloudfs';
+----
+true
+
+query I
+SELECT regexp_matches(cloudfs_version(), '^cloudfs v[0-9]+\.[0-9]+\.[0-9]+$');
+----
+true
+
 # All 4 schemes are registered
 query I
 SELECT cloudfs_providers() LIKE '%spfs%'

@@ -192,8 +192,9 @@ static void LoadInternal(ExtensionLoader& loader) {
 
     // cloudfs_version() keeps prefix — version() is a DuckDB built-in
     loader.RegisterFunction(ScalarFunction(
-        "cloudfs_version", {}, LogicalType::VARCHAR,
-        [](DataChunk&, ExpressionState&, Vector& r) { r.SetValue(0, Value("cloudfs 0.1.0")); }));
+        "cloudfs_version", {}, LogicalType::VARCHAR, [](DataChunk&, ExpressionState&, Vector& r) {
+            r.SetValue(0, Value("cloudfs " + CloudfsExtension().Version()));
+        }));
 
     // cloudfs_providers()
     {
@@ -243,7 +244,7 @@ std::string CloudfsExtension::Version() const {
 #ifdef EXT_VERSION_CLOUDFS
     return EXT_VERSION_CLOUDFS;
 #else
-    return "0.1.0";
+    return "v0.2.0";
 #endif
 }
 
